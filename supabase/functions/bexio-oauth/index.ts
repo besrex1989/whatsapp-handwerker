@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
-const BEXIO_TOKEN_URL = "https://idp.bexio.com/token";
+const BEXIO_TOKEN_URL = "https://auth.bexio.com/token";
 
 serve(async (req) => {
   const url = new URL(req.url);
@@ -90,7 +90,7 @@ serve(async (req) => {
       state: tenant_id,
     });
 
-    const authUrl = `https://idp.bexio.com/authorize?${params}`;
+    const authUrl = `https://auth.bexio.com/authorize?${params}`;
 
     return new Response(JSON.stringify({ url: authUrl }), {
       status: 200,

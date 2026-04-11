@@ -552,7 +552,7 @@ async function getBexioToken(tenant: any): Promise<string> {
   if (tenant.bexio_expires_at) {
     var expiresAt = new Date(tenant.bexio_expires_at).getTime();
     if (Date.now() > expiresAt - 300000) {
-      var resp = await fetch("https://idp.bexio.com/token", {
+      var resp = await fetch("https://auth.bexio.com/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
