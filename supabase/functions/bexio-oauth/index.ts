@@ -87,7 +87,7 @@ serve(async (req) => {
       client_id: Deno.env.get("BEXIO_CLIENT_ID")!,
       redirect_uri: `${Deno.env.get("SUPABASE_URL")}/functions/v1/bexio-oauth`,
       response_type: "code",
-      scope: "openid profile email kb_invoice kb_article contact_show contact_edit",
+      scope: "openid profile offline_access contact_show contact_edit kb_invoice_edit article_show",
       state: tenant_id,
     });
 
