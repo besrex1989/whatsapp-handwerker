@@ -1,6 +1,6 @@
 // Supabase Config — replace with your project values
 var SUPABASE_URL = "https://rdbislocgdraggiapxod.supabase.co";
-var SUPABASE_ANON_KEY = "DEIN_ANON_KEY_HIER"; // Replace with your anon key
+var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkYmlzbG9jZ2RyYWdnaWFweG9kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5MDk2NDIsImV4cCI6MjA5MTQ4NTY0Mn0.xreLK3j-9rgW1xPS7G9-WCW7JqQiEgTdHTKsgUeEUJs";
 
 var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
