@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Bexio verbinden...</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 60px 20px; }
+    .spinner { display: inline-block; width: 40px; height: 40px; border: 4px solid #ccc; border-top-color: #25D366; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 20px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="spinner"></div>
+  <h2 id="status">Bexio wird verbunden...</h2>
+  <p id="detail">Bitte warten.</p>
+  <script>
+    (async function() {
+      var params = new URLSearchParams(window.location.search);
+      var code = params.get("code");
+      var state = params.get("state");
+
+      if (!code || !state) {
+        document.getElementById("status").textContent = "Fehler";
+        document.getElementById("detail").textContent = "Fehlende Parameter. Bitte versuche es erneut.";
+        return;
+      }
+
+      // Redirect browser to Supabase Edge Function (preserves redirect_uri match for OAuth)
+      var supabaseUrl = "https://rdbislocgdraggiapxod.supabase.co/functions/v1/bexio-oauth";
+      var callbackUrl = window.location.origin + window.location.pathname;
+      window.location.href = supabaseUrl
+        + "?code=" + encodeURIComponent(code)
+        + "&state=" + encodeURIComponent(state)
+        + "&redirect_uri=" + encodeURIComponent(callbackUrl);
+    })();
+  </script>
+</body>
+</html>

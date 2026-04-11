@@ -6,10 +6,12 @@ const BEXIO_TOKEN_URL = "https://idp.bexio.com/token";
 serve(async (req) => {
   const url = new URL(req.url);
 
-  // Handle OAuth callback: GET /bexio-oauth?code=xxx&state=tenant_id
+  // Handle OAuth callback: GET /bexio-oauth?code=xxx&state=tenant_id&redirect_uri=xxx
   if (req.method === "GET") {
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state"); // tenant_id
+    const redirectUri = url.searchParams.get("redirect_uri")
+      || Deno.env.get("SUPABASE_URL") + "/functions/v1/bexio-oauth";
 
     if (!code || !state) {
       return new Response("Fehlende Parameter (code oder state).", { status: 400 });
@@ -25,7 +27,7 @@ serve(async (req) => {
           code,
           client_id: Deno.env.get("BEXIO_CLIENT_ID")!,
           client_secret: Deno.env.get("BEXIO_CLIENT_SECRET")!,
-          redirect_uri: `${Deno.env.get("SUPABASE_URL")}/functions/v1/bexio-oauth`,
+          redirect_uri: redirectUri,
         }),
       });
 
