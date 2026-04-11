@@ -57,17 +57,13 @@ serve(async (req) => {
         .eq("id", state);
 
       return new Response(
-        `<!DOCTYPE html>
-        <html>
-        <head><meta charset="utf-8"><title>Bexio verbunden</title></head>
-        <body style="font-family:sans-serif;text-align:center;padding:40px">
-          <h1>✅ Bexio erfolgreich verbunden!</h1>
-          <p>Du kannst dieses Fenster jetzt schliessen und WhatsApp verwenden.</p>
-        </body>
-        </html>`,
+        JSON.stringify({ success: true, message: "Bexio erfolgreich verbunden!" }),
         {
           status: 200,
-          headers: { "Content-Type": "text/html; charset=utf-8" },
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
         },
       );
     } catch (err) {

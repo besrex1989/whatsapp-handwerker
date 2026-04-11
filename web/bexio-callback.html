@@ -47,13 +47,30 @@
         return;
       }
 
-      // Redirect browser to Supabase Edge Function (preserves redirect_uri match for OAuth)
+      // Call Supabase Edge Function to exchange code for tokens
       var supabaseUrl = "https://rdbislocgdraggiapxod.supabase.co/functions/v1/bexio-oauth";
       var callbackUrl = window.location.origin + window.location.pathname;
-      window.location.href = supabaseUrl
+      var fetchUrl = supabaseUrl
         + "?code=" + encodeURIComponent(code)
         + "&state=" + encodeURIComponent(state)
         + "&redirect_uri=" + encodeURIComponent(callbackUrl);
+
+      try {
+        var resp = await fetch(fetchUrl);
+        document.querySelector(".spinner").style.display = "none";
+        if (resp.ok) {
+          document.getElementById("status").textContent = "Bexio erfolgreich verbunden!";
+          document.getElementById("detail").textContent = "Du kannst dieses Fenster jetzt schliessen und WhatsApp verwenden.";
+        } else {
+          var errText = await resp.text();
+          document.getElementById("status").textContent = "Fehler bei der Verbindung";
+          document.getElementById("detail").textContent = errText || "Bitte versuche es erneut.";
+        }
+      } catch (err) {
+        document.querySelector(".spinner").style.display = "none";
+        document.getElementById("status").textContent = "Netzwerkfehler";
+        document.getElementById("detail").textContent = err.message;
+      }
     })();
   </script>
 </body>
