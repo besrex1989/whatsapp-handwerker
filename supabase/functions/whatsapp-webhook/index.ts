@@ -193,11 +193,13 @@ Deno.serve(async (req: Request) => {
       if (text === "neu") {
         await updateStep(session.id, "contact_new_name");
         await sendText(from, "Neuer Kontakt: Wie heisst der Kunde? (Firma oder Name)");
-      } else if (msgBody.length >= 2 && tenant) {
-        if (!tenant.bexio_access_token) {
-          await sendText(from, "Bexio ist noch nicht verbunden.\nBitte verbinde zuerst dein Bexio-Konto im Dashboard.\n\nSchreibe *neu* um einen Kontakt manuell anzulegen.");
-          return new Response("OK", { status: 200 });
-        }
+      } else if (msgBody.length < 2) {
+        await sendText(from, "Bitte gib mindestens 2 Buchstaben ein.");
+      } else if (!tenant) {
+        await sendText(from, "Fehler: Tenant nicht gefunden. Bitte schreibe *neustart*.");
+      } else if (!tenant.bexio_access_token) {
+        await sendText(from, "Bexio ist noch nicht verbunden.\nBitte verbinde zuerst dein Bexio-Konto im Dashboard.\n\nSchreibe *neu* um einen Kontakt manuell anzulegen.");
+      } else {
         try {
           var contacts = await bexioSearchContacts(tenant, msgBody);
           if (contacts.length === 0) {
@@ -207,7 +209,6 @@ Deno.serve(async (req: Request) => {
             ]);
             await updateStep(session.id, "contact_select");
           } else {
-            // Show as list
             var rows: Array<{id: string; title: string; description: string}> = [];
             contacts.slice(0, 10).forEach(function (c: any, i: number) {
               var details = [c.address, c.city].filter(Boolean).join(", ");
@@ -228,8 +229,6 @@ Deno.serve(async (req: Request) => {
           console.error("[Contact Search] Error:", searchErr);
           await sendText(from, "Fehler bei der Bexio-Suche: " + String(searchErr).slice(0, 200) + "\n\nSchreibe *neu* um einen Kontakt manuell anzulegen, oder versuche es erneut.");
         }
-      } else {
-        await sendText(from, "Bitte gib mindestens 2 Buchstaben ein.");
       }
 
     } else if (step === "contact_select") {
