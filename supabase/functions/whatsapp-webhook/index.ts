@@ -198,30 +198,35 @@ Deno.serve(async (req: Request) => {
           await sendText(from, "Bexio ist noch nicht verbunden.\nBitte verbinde zuerst dein Bexio-Konto im Dashboard.\n\nSchreibe *neu* um einen Kontakt manuell anzulegen.");
           return new Response("OK", { status: 200 });
         }
-        var contacts = await bexioSearchContacts(tenant, msgBody);
-        if (contacts.length === 0) {
-          await sendButtons(from, "Keine Kontakte fuer \"" + msgBody + "\" gefunden.", [
-            { id: "new_contact", title: "Neu anlegen" },
-            { id: "search_again", title: "Nochmal suchen" },
-          ]);
-          await updateStep(session.id, "contact_select");
-        } else {
-          // Show as list
-          var rows: Array<{id: string; title: string; description: string}> = [];
-          contacts.slice(0, 10).forEach(function (c: any, i: number) {
-            var details = [c.address, c.city].filter(Boolean).join(", ");
-            rows.push({
-              id: "contact_" + c.id,
-              title: (c.name_1 || "").slice(0, 24),
-              description: details.slice(0, 72),
+        try {
+          var contacts = await bexioSearchContacts(tenant, msgBody);
+          if (contacts.length === 0) {
+            await sendButtons(from, "Keine Kontakte fuer \"" + msgBody + "\" gefunden.", [
+              { id: "new_contact", title: "Neu anlegen" },
+              { id: "search_again", title: "Nochmal suchen" },
+            ]);
+            await updateStep(session.id, "contact_select");
+          } else {
+            // Show as list
+            var rows: Array<{id: string; title: string; description: string}> = [];
+            contacts.slice(0, 10).forEach(function (c: any, i: number) {
+              var details = [c.address, c.city].filter(Boolean).join(", ");
+              rows.push({
+                id: "contact_" + c.id,
+                title: (c.name_1 || "").slice(0, 24),
+                description: details.slice(0, 72),
+              });
             });
-          });
-          await sendList(from, contacts.length + " Kontakt(e) gefunden:", "Kontakt waehlen", [
-            { title: "Kontakte", rows: rows },
-          ]);
-          await supabase.from("sessions_handwerker").update({
-            step: "contact_select", search_results: contacts.slice(0, 10), updated_at: new Date().toISOString(),
-          }).eq("id", session.id);
+            await sendList(from, contacts.length + " Kontakt(e) gefunden:", "Kontakt waehlen", [
+              { title: "Kontakte", rows: rows },
+            ]);
+            await supabase.from("sessions_handwerker").update({
+              step: "contact_select", search_results: contacts.slice(0, 10), updated_at: new Date().toISOString(),
+            }).eq("id", session.id);
+          }
+        } catch (searchErr) {
+          console.error("[Contact Search] Error:", searchErr);
+          await sendText(from, "Fehler bei der Bexio-Suche: " + String(searchErr).slice(0, 200) + "\n\nSchreibe *neu* um einen Kontakt manuell anzulegen, oder versuche es erneut.");
         }
       } else {
         await sendText(from, "Bitte gib mindestens 2 Buchstaben ein.");
@@ -552,6 +557,7 @@ async function getBexioToken(tenant: any): Promise<string> {
   if (tenant.bexio_expires_at) {
     var expiresAt = new Date(tenant.bexio_expires_at).getTime();
     if (Date.now() > expiresAt - 300000) {
+      console.log("[Bexio] Token expired, refreshing...");
       var resp = await fetch("https://auth.bexio.com/realms/bexio/protocol/openid-connect/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -560,8 +566,14 @@ async function getBexioToken(tenant: any): Promise<string> {
           client_id: Deno.env.get("BEXIO_CLIENT_ID")!, client_secret: Deno.env.get("BEXIO_CLIENT_SECRET")!,
         }),
       });
+      if (!resp.ok) {
+        var errText = await resp.text();
+        console.error("[Bexio] Token refresh failed:", resp.status, errText);
+        throw new Error("Bexio Token-Refresh fehlgeschlagen (" + resp.status + ")");
+      }
       var data = await resp.json();
       token = data.access_token;
+      console.log("[Bexio] Token refreshed successfully");
       await supabase.from("tenants").update({
         bexio_access_token: data.access_token,
         bexio_refresh_token: data.refresh_token || tenant.bexio_refresh_token,
@@ -569,17 +581,32 @@ async function getBexioToken(tenant: any): Promise<string> {
       }).eq("id", tenant.id);
     }
   }
+  if (!token) {
+    throw new Error("Kein Bexio-Token vorhanden");
+  }
   return token;
 }
 
 async function bexioSearchContacts(tenant: any, term: string): Promise<any[]> {
   var token = await getBexioToken(tenant);
+  console.log("[Bexio] Searching contacts for:", term);
   var resp = await fetch("https://api.bexio.com/2.0/contact/search", {
     method: "POST",
-    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify([{ field: "name_1", value: term, criteria: "like" }]),
   });
-  return resp.json();
+  if (!resp.ok) {
+    var errText = await resp.text();
+    console.error("[Bexio] Search error:", resp.status, errText);
+    throw new Error("Bexio Suche fehlgeschlagen (" + resp.status + "): " + errText.slice(0, 200));
+  }
+  var data = await resp.json();
+  if (!Array.isArray(data)) {
+    console.error("[Bexio] Search returned non-array:", JSON.stringify(data));
+    return [];
+  }
+  console.log("[Bexio] Found", data.length, "contacts");
+  return data;
 }
 
 async function bexioCreateContact(tenant: any, c: { name: string; address: string; postcode: string; city: string }): Promise<any> {
