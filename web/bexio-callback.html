@@ -7,21 +7,43 @@
     body { font-family: sans-serif; text-align: center; padding: 60px 20px; }
     .spinner { display: inline-block; width: 40px; height: 40px; border: 4px solid #ccc; border-top-color: #25D366; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 20px; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .debug { margin-top: 30px; text-align: left; background: #f5f5f5; padding: 15px; border-radius: 8px; word-break: break-all; font-size: 12px; max-width: 600px; margin-left: auto; margin-right: auto; }
   </style>
 </head>
 <body>
   <div class="spinner"></div>
   <h2 id="status">Bexio wird verbunden...</h2>
   <p id="detail">Bitte warten.</p>
+  <div id="debug" class="debug" style="display:none;"></div>
   <script>
     (async function() {
+      // Check query params AND hash fragment (some OAuth providers use fragments)
       var params = new URLSearchParams(window.location.search);
-      var code = params.get("code");
-      var state = params.get("state");
+      var hashParams = new URLSearchParams(window.location.hash.replace("#", "?"));
 
-      if (!code || !state) {
+      var code = params.get("code") || hashParams.get("code");
+      var state = params.get("state") || hashParams.get("state");
+      var error = params.get("error") || hashParams.get("error");
+      var errorDesc = params.get("error_description") || hashParams.get("error_description");
+
+      // Show debug info if something went wrong
+      if (error || (!code && !state)) {
+        document.querySelector(".spinner").style.display = "none";
         document.getElementById("status").textContent = "Fehler";
-        document.getElementById("detail").textContent = "Fehlende Parameter. Bitte versuche es erneut.";
+
+        if (error) {
+          document.getElementById("detail").textContent = error + ": " + (errorDesc || "Unbekannter Fehler");
+        } else {
+          document.getElementById("detail").textContent = "Fehlende Parameter. Bitte versuche es erneut.";
+        }
+
+        // Show debug info
+        var debugEl = document.getElementById("debug");
+        debugEl.style.display = "block";
+        debugEl.innerHTML = "<strong>Debug:</strong><br>"
+          + "URL: " + window.location.href + "<br>"
+          + "Search: " + window.location.search + "<br>"
+          + "Hash: " + window.location.hash;
         return;
       }
 
