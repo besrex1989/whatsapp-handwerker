@@ -1,7 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
-import { config } from '../config';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
-export const supabase = createClient(config.supabase.url, config.supabase.serviceRoleKey);
+export const supabase = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+);
 
 // ---------- Tenants ----------
 
@@ -24,10 +26,11 @@ export interface Tenant {
 }
 
 export async function getTenantByWhatsApp(phone: string): Promise<Tenant | null> {
+  const normalized = phone.replace("whatsapp:", "").replace(/\s+/g, "");
   const { data, error } = await supabase
-    .from('tenants')
-    .select('*')
-    .eq('whatsapp_number', phone)
+    .from("tenants")
+    .select("*")
+    .eq("whatsapp_number", normalized)
     .single();
   if (error) return null;
   return data as Tenant;
@@ -35,9 +38,9 @@ export async function getTenantByWhatsApp(phone: string): Promise<Tenant | null>
 
 export async function updateTenant(id: string, updates: Partial<Tenant>) {
   const { error } = await supabase
-    .from('tenants')
+    .from("tenants")
     .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', id);
+    .eq("id", id);
   if (error) throw error;
 }
 
@@ -65,26 +68,25 @@ export interface Session {
 }
 
 export async function getOrCreateSession(phone: string): Promise<Session> {
-  // Try to find an existing, non-expired session
+  const normalized = phone.replace("whatsapp:", "").replace(/\s+/g, "");
+
   const { data: existing } = await supabase
-    .from('sessions_handwerker')
-    .select('*')
-    .eq('phone_number', phone)
+    .from("sessions_handwerker")
+    .select("*")
+    .eq("phone_number", normalized)
     .single();
 
   if (existing) {
-    // Check if expired
     if (new Date(existing.expires_at) < new Date()) {
       await resetSession(existing.id);
-      return { ...existing, step: 'start', expires_at: newExpiry() } as Session;
+      return { ...existing, step: "start", expires_at: newExpiry() } as Session;
     }
     return existing as Session;
   }
 
-  // Create new session
   const { data, error } = await supabase
-    .from('sessions_handwerker')
-    .insert({ phone_number: phone })
+    .from("sessions_handwerker")
+    .insert({ phone_number: normalized })
     .select()
     .single();
   if (error) throw error;
@@ -93,17 +95,17 @@ export async function getOrCreateSession(phone: string): Promise<Session> {
 
 export async function updateSession(id: string, updates: Partial<Session>) {
   const { error } = await supabase
-    .from('sessions_handwerker')
+    .from("sessions_handwerker")
     .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', id);
+    .eq("id", id);
   if (error) throw error;
 }
 
 export async function resetSession(id: string) {
   await supabase
-    .from('sessions_handwerker')
+    .from("sessions_handwerker")
     .update({
-      step: 'start',
+      step: "start",
       contact_data: null,
       bexio_contact_id: null,
       bexio_invoice_id: null,
@@ -120,7 +122,7 @@ export async function resetSession(id: string) {
       expires_at: newExpiry(),
       updated_at: new Date().toISOString(),
     })
-    .eq('id', id);
+    .eq("id", id);
 }
 
 function newExpiry(): string {
