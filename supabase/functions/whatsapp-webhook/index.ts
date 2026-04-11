@@ -100,10 +100,12 @@ Deno.serve(async (req: Request) => {
 
     // --- Tenant finden ---
     if (session && !session.tenant_id) {
+      // Try multiple phone formats: +41xxx, whatsapp:+41xxx, 41xxx
+      var phoneClean = phone.replace("+", "");
       var { data: tenant } = await supabase
         .from("tenants")
         .select("*")
-        .eq("whatsapp_number", phone)
+        .or("whatsapp_number.eq." + phone + ",whatsapp_number.eq.whatsapp:" + phone + ",whatsapp_number.eq." + phoneClean)
         .single();
 
       if (!tenant) {
