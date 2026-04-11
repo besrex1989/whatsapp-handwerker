@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — WhatsApp Handwerker</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div class="auth-page">
+    <div class="auth-card">
+      <a href="/" class="logo">WH<span>Handwerker</span></a>
+
+      <!-- Login Form -->
+      <div id="login-form">
+        <h2>Anmelden</h2>
+        <div id="login-error" class="auth-error"></div>
+        <form onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label for="login-email">E-Mail</label>
+            <input type="email" id="login-email" placeholder="deine@email.ch" required>
+          </div>
+          <div class="form-group">
+            <label for="login-password">Passwort</label>
+            <input type="password" id="login-password" placeholder="Dein Passwort" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" id="login-btn">Anmelden</button>
+        </form>
+        <div class="auth-toggle">
+          Noch kein Konto? <a href="#" onclick="showRegister()">Registrieren</a>
+        </div>
+      </div>
+
+      <!-- Register Form -->
+      <div id="register-form" style="display:none">
+        <h2>Konto erstellen</h2>
+        <div id="register-error" class="auth-error"></div>
+        <div id="register-success" class="auth-success"></div>
+        <form onsubmit="handleRegister(event)">
+          <div class="form-group">
+            <label for="reg-name">Vollstaendiger Name</label>
+            <input type="text" id="reg-name" placeholder="Max Muster" required>
+          </div>
+          <div class="form-group">
+            <label for="reg-email">E-Mail</label>
+            <input type="email" id="reg-email" placeholder="deine@email.ch" required>
+          </div>
+          <div class="form-group">
+            <label for="reg-phone">WhatsApp Nummer</label>
+            <input type="tel" id="reg-phone" placeholder="+41791234567" required>
+          </div>
+          <div class="form-group">
+            <label for="reg-password">Passwort</label>
+            <input type="password" id="reg-password" placeholder="Mind. 6 Zeichen" minlength="6" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" id="register-btn">Kostenlos registrieren</button>
+        </form>
+        <div class="auth-toggle">
+          Schon ein Konto? <a href="#" onclick="showLogin()">Anmelden</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — WhatsApp Handwerker</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="container nav-container">
+      <a href="/" class="logo">WH<span>Handwerker</span></a>
+      <div class="nav-links">
+        <span id="user-email" style="color: var(--gray); font-size: 14px;"></span>
+        <button class="logout-btn" onclick="handleLogout()">Abmelden</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="dashboard">
+    <!-- Header -->
+    <div class="dashboard-header">
+      <div class="container">
+        <h1 id="greeting">Willkommen!</h1>
+        <p>Dein WhatsApp Handwerker Dashboard</p>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="container">
+      <div class="dashboard-grid">
+
+        <!-- Konto Status -->
+        <div class="dash-card">
+          <h3>Konto Status</h3>
+          <div class="dash-info">Plan</div>
+          <div class="dash-value"><span id="plan-badge" class="status-badge trial">Trial</span></div>
+          <div class="dash-info">Trial endet</div>
+          <div class="dash-value" id="trial-end">—</div>
+          <div class="dash-info">WhatsApp Nummer</div>
+          <div class="dash-value" id="whatsapp-nr">—</div>
+        </div>
+
+        <!-- Bexio Verbindung -->
+        <div class="dash-card">
+          <h3>Bexio Verbindung</h3>
+          <div class="dash-info">Status</div>
+          <div class="dash-value"><span id="bexio-status" class="status-badge inactive">Nicht verbunden</span></div>
+          <div style="margin-top: 16px;">
+            <button id="bexio-connect-btn" class="btn btn-primary" onclick="connectBexio()">Mit Bexio verbinden</button>
+          </div>
+        </div>
+
+        <!-- WhatsApp Bot -->
+        <div class="dash-card">
+          <h3>WhatsApp Bot</h3>
+          <p style="color: var(--gray); margin-bottom: 16px;">
+            Sende eine Nachricht an den Bot um loszulegen:
+          </p>
+          <div class="dash-value" id="bot-number" style="font-size: 20px;">+41 ...</div>
+          <p style="color: var(--gray); font-size: 14px; margin-top: 8px;">
+            Schreibe <strong>hilfe</strong> fuer eine Uebersicht der Befehle.
+          </p>
+        </div>
+
+        <!-- Schnellstart -->
+        <div class="dash-card">
+          <h3>Schnellstart</h3>
+          <div style="color: var(--gray); font-size: 15px; line-height: 1.8;">
+            <p><strong>1.</strong> Verbinde dein Bexio-Konto</p>
+            <p><strong>2.</strong> Speichere die Bot-Nummer in deinen Kontakten</p>
+            <p><strong>3.</strong> Schreibe <strong>rechnung</strong> um deine erste Rechnung zu erstellen</p>
+            <p><strong>4.</strong> Oder sende ein Foto eines Belegs</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>
