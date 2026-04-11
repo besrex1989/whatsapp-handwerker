@@ -1,7 +1,7 @@
 import { type Tenant, updateTenant } from "./supabase.ts";
 
 const BEXIO_API = "https://api.bexio.com/2.0";
-const BEXIO_TOKEN_URL = "https://auth.bexio.com/token";
+const BEXIO_TOKEN_URL = "https://auth.bexio.com/realms/bexio/protocol/openid-connect/token";
 
 const BEXIO_CLIENT_ID = () => Deno.env.get("BEXIO_CLIENT_ID")!;
 const BEXIO_CLIENT_SECRET = () => Deno.env.get("BEXIO_CLIENT_SECRET")!;
