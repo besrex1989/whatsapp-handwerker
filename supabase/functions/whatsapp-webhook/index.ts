@@ -194,6 +194,10 @@ Deno.serve(async (req: Request) => {
         await updateStep(session.id, "contact_new_name");
         await sendText(from, "Neuer Kontakt: Wie heisst der Kunde? (Firma oder Name)");
       } else if (msgBody.length >= 2 && tenant) {
+        if (!tenant.bexio_access_token) {
+          await sendText(from, "Bexio ist noch nicht verbunden.\nBitte verbinde zuerst dein Bexio-Konto im Dashboard.\n\nSchreibe *neu* um einen Kontakt manuell anzulegen.");
+          return new Response("OK", { status: 200 });
+        }
         var contacts = await bexioSearchContacts(tenant, msgBody);
         if (contacts.length === 0) {
           await sendButtons(from, "Keine Kontakte fuer \"" + msgBody + "\" gefunden.", [
@@ -441,6 +445,13 @@ Deno.serve(async (req: Request) => {
     return new Response("OK", { status: 200 });
   } catch (err) {
     console.error("[WhatsApp Webhook] Error:", err);
+    try {
+      var errorFrom = "";
+      try { var b = JSON.parse(await req.clone().text()); errorFrom = b.entry[0].changes[0].value.messages[0].from; } catch (_e2) { /* ok */ }
+      if (errorFrom) {
+        await sendText(errorFrom, "Es ist ein Fehler aufgetreten: " + String(err).slice(0, 200) + "\n\nSchreibe *neustart* um es erneut zu versuchen.");
+      }
+    } catch (_e3) { /* ok */ }
     return new Response("OK", { status: 200 });
   }
 });
