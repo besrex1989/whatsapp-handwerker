@@ -35,13 +35,19 @@
         <!-- Konto Status -->
         <div class="dash-card">
           <h3>Konto Status</h3>
+          <div class="dash-info">Name</div>
+          <div class="dash-value" id="tenant-name">—</div>
+          <div class="dash-info">E-Mail</div>
+          <div class="dash-value" id="tenant-email">—</div>
           <div class="dash-info">Plan</div>
           <div class="dash-value"><span id="plan-badge" class="status-badge trial">Trial</span></div>
           <div class="dash-info">Trial endet</div>
           <div class="dash-value" id="trial-end">—</div>
           <div class="dash-info">WhatsApp Nummer</div>
           <div class="dash-value" id="whatsapp-nr">—</div>
-          <div style="margin-top: 8px;">
+          <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn btn-outline" style="font-size: 13px; padding: 6px 12px;" onclick="changeFullName()">Name aendern</button>
+            <button class="btn btn-outline" style="font-size: 13px; padding: 6px 12px;" onclick="changeEmail()">E-Mail aendern</button>
             <button class="btn btn-outline" style="font-size: 13px; padding: 6px 12px;" onclick="changeWhatsappNumber()">Nummer aendern</button>
           </div>
         </div>

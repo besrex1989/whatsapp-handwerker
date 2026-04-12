@@ -60,6 +60,12 @@ async function loadDashboard() {
     trialEndEl.textContent = d.toLocaleDateString("de-CH");
   }
 
+  // Name + email (read-only display; edits go through changeFullName / changeEmail)
+  var nameEl = document.getElementById("tenant-name");
+  if (nameEl) nameEl.textContent = tenant.full_name || "—";
+  var emailEl2 = document.getElementById("tenant-email");
+  if (emailEl2) emailEl2.textContent = tenant.email || user.email || "—";
+
   // WhatsApp number
   var whatsappEl = document.getElementById("whatsapp-nr");
   if (whatsappEl) {
@@ -100,6 +106,77 @@ async function loadDashboard() {
       botLinkEl.href = "https://wa.me/" + digits + "?text=" + encodeURIComponent("hilfe");
     }
   }
+}
+
+// Change full name (or company name)
+async function changeFullName() {
+  var user = await checkAuth();
+  if (!user) { alert("Nicht angemeldet."); return; }
+
+  var currentEl = document.getElementById("tenant-name");
+  var current = currentEl ? currentEl.textContent : "";
+  var input = prompt(
+    "Neuen Namen eingeben (Vorname Nachname oder Firmenname):",
+    current && current !== "—" ? current : ""
+  );
+  if (input === null) return; // cancelled
+  input = String(input).trim();
+  if (!input) { alert("Bitte einen Namen eingeben."); return; }
+
+  var updateResult = await supabase
+    .from("tenants")
+    .update({ full_name: input, updated_at: new Date().toISOString() })
+    .eq("email", user.email);
+
+  if (updateResult.error) {
+    alert("Fehler beim Speichern: " + updateResult.error.message);
+    return;
+  }
+
+  // Also keep the name in the auth user metadata in sync so it stays
+  // consistent if we ever re-seed the tenant from metadata.
+  await supabase.auth.updateUser({ data: { full_name: input } });
+
+  loadDashboard();
+}
+
+// Change email address.
+// Supabase sends a confirmation link to the NEW address; only after the user
+// clicks it does auth.users.email actually change. A database trigger then
+// mirrors the new email onto the tenants row (see migration 007).
+async function changeEmail() {
+  var user = await checkAuth();
+  if (!user) { alert("Nicht angemeldet."); return; }
+
+  var input = prompt(
+    "Neue E-Mail-Adresse eingeben:\n\n" +
+    "Wir senden dir einen Bestaetigungs-Link an die neue Adresse. " +
+    "Die Aenderung wird erst aktiv, nachdem du den Link geklickt hast.",
+    user.email || ""
+  );
+  if (input === null) return;
+  input = String(input).trim().toLowerCase();
+  if (!input) { alert("Bitte eine E-Mail eingeben."); return; }
+  if (input === String(user.email || "").toLowerCase()) {
+    alert("Das ist bereits deine aktuelle E-Mail-Adresse.");
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input)) {
+    alert("Bitte eine gueltige E-Mail-Adresse eingeben.");
+    return;
+  }
+
+  var result = await supabase.auth.updateUser({ email: input });
+  if (result.error) {
+    alert("Fehler: " + result.error.message);
+    return;
+  }
+
+  alert(
+    "Bestaetigungs-Link gesendet an " + input + ".\n\n" +
+    "Bitte klicke den Link in der E-Mail, um die Aenderung abzuschliessen. " +
+    "Danach musst du dich mit der neuen Adresse einloggen."
+  );
 }
 
 // Change WhatsApp number
