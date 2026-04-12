@@ -1,0 +1,111 @@
+<!--
+  WhatsBill — Confirm Signup Email
+  Paste this into Supabase Dashboard -> Authentication -> Email Templates
+  -> "Confirm signup". Subject suggestion: "Bestaetige deine E-Mail - WhatsBill"
+  Supabase variable used: {{ .ConfirmationURL }}
+-->
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bestaetige deine E-Mail</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f5f7fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f7fa;padding:40px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;width:100%;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+
+          <!-- Header / Logo -->
+          <tr>
+            <td align="center" style="padding:40px 40px 24px 40px;">
+              <div style="font-size:28px;font-weight:700;letter-spacing:-0.5px;">
+                <span style="color:#25D366;">Whats</span><span style="color:#1a1a1a;">Bill</span>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:0 40px 16px 40px;">
+              <h1 style="margin:0 0 16px 0;font-size:24px;line-height:1.3;font-weight:700;color:#1a1a1a;">
+                Willkommen bei WhatsBill!
+              </h1>
+              <p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;color:#4a4a4a;">
+                Danke, dass du dich registriert hast. Bestaetige deine
+                E-Mail-Adresse, um dein Konto zu aktivieren und deine
+                14-taegige Testphase zu starten.
+              </p>
+            </td>
+          </tr>
+
+          <!-- CTA Button -->
+          <tr>
+            <td align="center" style="padding:16px 40px 32px 40px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" bgcolor="#25D366" style="border-radius:8px;">
+                    <a href="{{ .ConfirmationURL }}"
+                       style="display:inline-block;padding:14px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;background-color:#25D366;">
+                      E-Mail bestaetigen
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Fallback link -->
+          <tr>
+            <td style="padding:0 40px 16px 40px;">
+              <p style="margin:0 0 8px 0;font-size:13px;line-height:1.5;color:#8a8a8a;">
+                Falls der Button nicht funktioniert, kopiere diesen Link in deinen Browser:
+              </p>
+              <p style="margin:0 0 24px 0;font-size:13px;line-height:1.5;word-break:break-all;">
+                <a href="{{ .ConfirmationURL }}" style="color:#25D366;text-decoration:none;">{{ .ConfirmationURL }}</a>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Next steps -->
+          <tr>
+            <td style="padding:0 40px 32px 40px;">
+              <div style="background-color:#f5f7fa;border-radius:8px;padding:20px;">
+                <p style="margin:0 0 12px 0;font-size:14px;font-weight:600;color:#1a1a1a;">
+                  Naechste Schritte:
+                </p>
+                <p style="margin:0 0 6px 0;font-size:14px;line-height:1.6;color:#4a4a4a;">
+                  <strong style="color:#25D366;">1.</strong> E-Mail bestaetigen (dieser Link)
+                </p>
+                <p style="margin:0 0 6px 0;font-size:14px;line-height:1.6;color:#4a4a4a;">
+                  <strong style="color:#25D366;">2.</strong> Im Dashboard dein Bexio-Konto verbinden
+                </p>
+                <p style="margin:0;font-size:14px;line-height:1.6;color:#4a4a4a;">
+                  <strong style="color:#25D366;">3.</strong> Erste Rechnung per WhatsApp erstellen
+                </p>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:24px 40px;border-top:1px solid #eaeaea;background-color:#fafafa;">
+              <p style="margin:0 0 8px 0;font-size:12px;line-height:1.5;color:#8a8a8a;text-align:center;">
+                Du hast dich nicht bei WhatsBill registriert?
+                Dann kannst du diese E-Mail einfach ignorieren.
+              </p>
+              <p style="margin:0;font-size:12px;line-height:1.5;color:#8a8a8a;text-align:center;">
+                <a href="https://whatsbill.ch" style="color:#8a8a8a;text-decoration:none;">whatsbill.ch</a>
+                &nbsp;&middot;&nbsp;
+                <a href="mailto:info@whatsbill.ch" style="color:#8a8a8a;text-decoration:none;">info@whatsbill.ch</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
