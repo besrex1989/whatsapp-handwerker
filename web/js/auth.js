@@ -67,14 +67,33 @@ if (window.location.hash === "#register") {
 }
 
 // ===== Show/Hide Forms =====
+function hideAllAuthForms() {
+  var ids = ["login-form", "register-form", "forgot-form"];
+  for (var i = 0; i < ids.length; i++) {
+    var el = document.getElementById(ids[i]);
+    if (el) el.style.display = "none";
+  }
+}
+
 function showRegister() {
-  document.getElementById("login-form").style.display = "none";
+  hideAllAuthForms();
   document.getElementById("register-form").style.display = "block";
 }
 
 function showLogin() {
-  document.getElementById("register-form").style.display = "none";
+  hideAllAuthForms();
   document.getElementById("login-form").style.display = "block";
+}
+
+function showForgotPassword() {
+  hideAllAuthForms();
+  document.getElementById("forgot-form").style.display = "block";
+  // Prefill email if already typed into login form
+  var loginEmail = document.getElementById("login-email");
+  var forgotEmail = document.getElementById("forgot-email");
+  if (loginEmail && forgotEmail && loginEmail.value) {
+    forgotEmail.value = loginEmail.value;
+  }
 }
 
 // ===== Login =====
@@ -104,6 +123,42 @@ async function handleLogin(e) {
   }
 
   window.location.href = "dashboard.html";
+}
+
+// ===== Forgot Password =====
+async function handleForgotPassword(e) {
+  e.preventDefault();
+  var errorEl = document.getElementById("forgot-error");
+  var successEl = document.getElementById("forgot-success");
+  var btn = document.getElementById("forgot-btn");
+  errorEl.style.display = "none";
+  successEl.style.display = "none";
+
+  var email = document.getElementById("forgot-email").value;
+
+  btn.textContent = "Wird gesendet...";
+  btn.disabled = true;
+
+  var redirectTo = window.location.origin + "/reset-password.html";
+  var result = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: redirectTo,
+  });
+
+  btn.textContent = "Link senden";
+  btn.disabled = false;
+
+  if (result.error) {
+    errorEl.textContent = "Fehler: " + result.error.message;
+    errorEl.style.display = "block";
+    return;
+  }
+
+  // Always show the same success message, regardless of whether the email
+  // exists — avoids leaking which emails are registered.
+  successEl.textContent = "Wenn ein Konto mit dieser E-Mail existiert, "
+    + "haben wir dir einen Link zum Zuruecksetzen geschickt. "
+    + "Pruefe dein Postfach.";
+  successEl.style.display = "block";
 }
 
 // ===== Register =====

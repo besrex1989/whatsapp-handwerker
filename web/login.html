@@ -28,7 +28,31 @@
           <button type="submit" class="btn btn-primary btn-block" id="login-btn">Anmelden</button>
         </form>
         <div class="auth-toggle">
+          <a href="#" onclick="showForgotPassword(); return false;">Passwort vergessen?</a>
+        </div>
+        <div class="auth-toggle">
           Noch kein Konto? <a href="#" onclick="showRegister()">Registrieren</a>
+        </div>
+      </div>
+
+      <!-- Forgot Password Form -->
+      <div id="forgot-form" style="display:none">
+        <h2>Passwort vergessen</h2>
+        <p style="color: var(--gray); font-size: 14px; margin-bottom: 16px;">
+          Gib deine E-Mail-Adresse ein. Wir senden dir einen Link,
+          um ein neues Passwort zu setzen.
+        </p>
+        <div id="forgot-error" class="auth-error"></div>
+        <div id="forgot-success" class="auth-success"></div>
+        <form onsubmit="handleForgotPassword(event)">
+          <div class="form-group">
+            <label for="forgot-email">E-Mail</label>
+            <input type="email" id="forgot-email" placeholder="deine@email.ch" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" id="forgot-btn">Link senden</button>
+        </form>
+        <div class="auth-toggle">
+          <a href="#" onclick="showLogin()">Zurueck zum Login</a>
         </div>
       </div>
 
