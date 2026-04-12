@@ -1,3 +1,22 @@
+// Toggles a password <input> between type="password" and type="text".
+// Called inline from the "Anzeigen" buttons on login / register / reset
+// password forms.
+function togglePassword(btn) {
+  var wrap = btn.closest(".password-field");
+  if (!wrap) return;
+  var input = wrap.querySelector("input");
+  if (!input) return;
+  if (input.type === "password") {
+    input.type = "text";
+    btn.textContent = "Ausblenden";
+    btn.setAttribute("aria-label", "Passwort ausblenden");
+  } else {
+    input.type = "password";
+    btn.textContent = "Anzeigen";
+    btn.setAttribute("aria-label", "Passwort anzeigen");
+  }
+}
+
 // Supabase Config — replace with your project values
 var SUPABASE_URL = "https://rdbislocgdraggiapxod.supabase.co";
 var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkYmlzbG9jZ2RyYWdnaWFweG9kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5MDk2NDIsImV4cCI6MjA5MTQ4NTY0Mn0.xreLK3j-9rgW1xPS7G9-WCW7JqQiEgTdHTKsgUeEUJs";

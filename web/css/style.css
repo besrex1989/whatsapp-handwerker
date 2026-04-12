@@ -527,6 +527,36 @@ body {
   box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.15);
 }
 
+/* Password field with inline "Anzeigen/Ausblenden" toggle button. */
+.password-field {
+  position: relative;
+}
+
+.password-field input {
+  padding-right: 76px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+
+.password-toggle:hover {
+  color: var(--text);
+  background: var(--bg-alt);
+}
+
 .auth-error {
   background: #fef2f2;
   color: #b91c1c;

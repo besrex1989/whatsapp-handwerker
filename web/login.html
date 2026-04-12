@@ -23,7 +23,10 @@
           </div>
           <div class="form-group">
             <label for="login-password">Passwort</label>
-            <input type="password" id="login-password" placeholder="Dein Passwort" required>
+            <div class="password-field">
+              <input type="password" id="login-password" placeholder="Dein Passwort" required>
+              <button type="button" class="password-toggle" onclick="togglePassword(this)" aria-label="Passwort anzeigen">Anzeigen</button>
+            </div>
           </div>
           <button type="submit" class="btn btn-primary btn-block" id="login-btn">Anmelden</button>
         </form>
@@ -76,7 +79,10 @@
           </div>
           <div class="form-group">
             <label for="reg-password">Passwort</label>
-            <input type="password" id="reg-password" placeholder="Mind. 6 Zeichen" minlength="6" required>
+            <div class="password-field">
+              <input type="password" id="reg-password" placeholder="Mind. 6 Zeichen" minlength="6" required>
+              <button type="button" class="password-toggle" onclick="togglePassword(this)" aria-label="Passwort anzeigen">Anzeigen</button>
+            </div>
           </div>
           <button type="submit" class="btn btn-primary btn-block" id="register-btn">Kostenlos registrieren</button>
         </form>
