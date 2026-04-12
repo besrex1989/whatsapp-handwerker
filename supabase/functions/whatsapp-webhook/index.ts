@@ -1039,10 +1039,29 @@ async function ensureBexioIds(
     });
     if (taxResp.ok) {
       var taxes = await taxResp.json();
-      var sales = Array.isArray(taxes)
-        ? taxes.find(function (t: any) { return t.type === "sales_tax" && t.is_active; })
-        : null;
-      if (sales) { taxId = sales.id; updated = true; }
+      if (Array.isArray(taxes)) {
+        // Prefer the standard sales_tax entry: active, type=sales_tax, and
+        // highest numeric value (so 8.1% > 2.6% reduced > 0% export).
+        // Fall back to any active sales_tax if none have a positive value.
+        var activeSales = taxes.filter(function (t: any) {
+          return t.type === "sales_tax" && t.is_active;
+        });
+        activeSales.sort(function (a: any, b: any) {
+          var va = parseFloat(String(a.value || "0"));
+          var vb = parseFloat(String(b.value || "0"));
+          return vb - va; // descending
+        });
+        var sales = activeSales[0] || null;
+        if (sales) {
+          console.log("[Bexio] Selected tax:", sales.id, "value=" + sales.value, "code=" + (sales.code || ""));
+          taxId = sales.id;
+          updated = true;
+        } else {
+          console.warn("[Bexio] No active sales_tax found in /3.0/taxes. Tenant is likely not VAT-registered; continuing without tax_id.");
+        }
+      }
+    } else {
+      console.warn("[Bexio] /3.0/taxes returned", taxResp.status);
     }
   }
   if (updated) {
@@ -1069,7 +1088,11 @@ function isBexioIdValidationError(errText: string): boolean {
 async function bexioCreateInvoice(tenant: any, params: { contactId: number; title: string; positions: any[] }): Promise<any> {
   var token = await getBexioToken(tenant);
 
-  async function postOnce(force: boolean): Promise<Response> {
+  // force  : refetch user/account/tax ids ignoring the cache
+  // noTax  : omit tax_id entirely (last-resort fallback for tenants whose
+  //          Bexio instance rejects every fetched tax_id — e.g. a company
+  //          that is not VAT-registered or has a broken tax configuration)
+  async function postOnce(force: boolean, noTax: boolean): Promise<Response> {
     var ids = await ensureBexioIds(tenant, token, force);
     if (!ids.userId || !ids.accountId) {
       throw new Error("Bexio-Konfiguration unvollstaendig (user_id=" + ids.userId + ", account_id=" + ids.accountId + ", tax_id=" + ids.taxId + ")");
@@ -1092,9 +1115,10 @@ async function bexioCreateInvoice(tenant: any, params: { contactId: number; titl
         amount: String(amt),
         account_id: ids.accountId,
       };
-      if (ids.taxId) pos.tax_id = ids.taxId;
+      if (!noTax && ids.taxId) pos.tax_id = ids.taxId;
       return pos;
     });
+    console.log("[Bexio] Creating invoice", { userId: ids.userId, accountId: ids.accountId, taxId: noTax ? "(omitted)" : ids.taxId, force: force });
     return await fetch("https://api.bexio.com/2.0/kb_invoice", {
       method: "POST",
       headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
@@ -1105,14 +1129,26 @@ async function bexioCreateInvoice(tenant: any, params: { contactId: number; titl
     });
   }
 
-  var resp = await postOnce(false);
+  // 1) First attempt with cached ids + tax_id
+  var resp = await postOnce(false, false);
+  // 2) On 422 with id error: force-refresh ids and retry
   if (resp.status === 422) {
     var errText0 = await resp.text();
     if (isBexioIdValidationError(errText0)) {
-      console.warn("[Bexio] Invoice create 422 with id error — clearing cached ids and retrying:", errText0.slice(0, 200));
-      resp = await postOnce(true);
+      console.warn("[Bexio] Invoice create 422 with id error — force-refreshing ids and retrying:", errText0.slice(0, 200));
+      resp = await postOnce(true, false);
     } else {
       throw new Error("Bexio Rechnung (422): " + errText0.slice(0, 300));
+    }
+  }
+  // 3) If retry still 422 on tax_id: last-resort retry without tax_id
+  if (resp.status === 422) {
+    var errText1 = await resp.text();
+    if (/tax_id/i.test(errText1)) {
+      console.warn("[Bexio] Invoice create 422 still tax_id after refresh — retrying without tax_id:", errText1.slice(0, 200));
+      resp = await postOnce(false, true);
+    } else {
+      throw new Error("Bexio Rechnung (422): " + errText1.slice(0, 300));
     }
   }
   if (!resp.ok) {
@@ -1188,7 +1224,7 @@ async function bexioAddInvoicePosition(
   var addTxt = pos.description || "";
   if (pos.unit) addTxt = addTxt + " (" + pos.unit + ")";
 
-  async function postOnce(force: boolean): Promise<Response> {
+  async function postOnce(force: boolean, noTax: boolean): Promise<Response> {
     var ids = await ensureBexioIds(tenant, token, force);
     if (!ids.accountId) {
       throw new Error("Kein Ertragskonto gefunden. Bitte pruefe deine Bexio-Konfiguration.");
@@ -1199,9 +1235,9 @@ async function bexioAddInvoicePosition(
       text: addTxt,
       account_id: ids.accountId,
     };
-    if (ids.taxId) body.tax_id = ids.taxId;
+    if (!noTax && ids.taxId) body.tax_id = ids.taxId;
 
-    console.log("[Bexio] Adding position to invoice", invoiceId, force ? "(retry, force-refresh)" : "");
+    console.log("[Bexio] Adding position to invoice", invoiceId, { force: force, noTax: noTax, taxId: noTax ? "(omitted)" : ids.taxId });
     return await fetch("https://api.bexio.com/2.0/kb_invoice/" + invoiceId + "/kb_position_custom", {
       method: "POST",
       headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
@@ -1209,14 +1245,23 @@ async function bexioAddInvoicePosition(
     });
   }
 
-  var resp = await postOnce(false);
+  var resp = await postOnce(false, false);
   if (resp.status === 422) {
     var errText0 = await resp.text();
     if (isBexioIdValidationError(errText0)) {
-      console.warn("[Bexio] Add position 422 with id error — clearing cached ids and retrying:", errText0.slice(0, 200));
-      resp = await postOnce(true);
+      console.warn("[Bexio] Add position 422 with id error — force-refreshing ids and retrying:", errText0.slice(0, 200));
+      resp = await postOnce(true, false);
     } else {
       throw new Error("Bexio Position (422): " + errText0.slice(0, 200));
+    }
+  }
+  if (resp.status === 422) {
+    var errText1 = await resp.text();
+    if (/tax_id/i.test(errText1)) {
+      console.warn("[Bexio] Add position 422 still tax_id after refresh — retrying without tax_id:", errText1.slice(0, 200));
+      resp = await postOnce(false, true);
+    } else {
+      throw new Error("Bexio Position (422): " + errText1.slice(0, 200));
     }
   }
   if (!resp.ok) {
