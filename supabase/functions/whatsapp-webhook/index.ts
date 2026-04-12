@@ -176,6 +176,7 @@ Deno.serve(async (req: Request) => {
       await sendText(from,
         "*Verfügbare Befehle:*\n\n" +
         "rechnung - Neue Rechnung erstellen\n" +
+        "angebot - Neues Angebot erstellen\n" +
         "suche - Kontakt suchen\n" +
         "neustart - Session zurücksetzen\n" +
         "hilfe - Diese Hilfe anzeigen"
@@ -191,32 +192,48 @@ Deno.serve(async (req: Request) => {
       await updateStep(session.id, "main_menu");
       await sendButtons(from, "Hallo! Was möchtest du tun?", [
         { id: "invoice", title: "Rechnung erstellen" },
+        { id: "offer", title: "Angebot erstellen" },
         { id: "search", title: "Kontakt suchen" },
       ]);
 
     } else if (step === "main_menu") {
       if (choice === "invoice" || choice === "1" || text.includes("rechnung")) {
-        await updateStep(session.id, "invoice_choice");
+        await supabase.from("sessions_handwerker").update({
+          step: "invoice_choice", bexio_document_type: "invoice", updated_at: new Date().toISOString(),
+        }).eq("id", session.id);
+        session.bexio_document_type = "invoice";
         await sendButtons(from, "Was möchtest du tun?", [
           { id: "new_invoice", title: "Neue Rechnung" },
           { id: "edit_draft", title: "Entwurf bearbeiten" },
         ]);
-      } else if (choice === "search" || choice === "2" || text.includes("suche")) {
+      } else if (choice === "offer" || choice === "2" || text.includes("angebot") || text.includes("offerte")) {
+        await supabase.from("sessions_handwerker").update({
+          step: "invoice_choice", bexio_document_type: "offer", updated_at: new Date().toISOString(),
+        }).eq("id", session.id);
+        session.bexio_document_type = "offer";
+        await sendButtons(from, "Was möchtest du tun?", [
+          { id: "new_invoice", title: "Neues Angebot" },
+          { id: "edit_draft", title: "Entwurf bearbeiten" },
+        ]);
+      } else if (choice === "search" || choice === "3" || text.includes("suche")) {
         await updateStep(session.id, "contact_search");
         await sendText(from, "Gib den Suchbegriff ein:");
       } else {
         await sendButtons(from, "Bitte wähle eine Option:", [
           { id: "invoice", title: "Rechnung erstellen" },
+          { id: "offer", title: "Angebot erstellen" },
           { id: "search", title: "Kontakt suchen" },
         ]);
       }
 
     } else if (step === "invoice_choice") {
+      var docTypeChoice: DocType = (session.bexio_document_type === "offer") ? "offer" : "invoice";
+      var docLabelChoice = docLabel(docTypeChoice);
       if (choice === "new_invoice" || text.includes("neu")) {
         await supabase.from("sessions_handwerker").update({
           step: "contact_search", manual_positions: [], updated_at: new Date().toISOString(),
         }).eq("id", session.id);
-        await sendText(from, "Neue Rechnung\n\nGib den Namen des Kunden ein um in Bexio zu suchen.\nOder schreibe *neu* um einen neuen Kontakt anzulegen.");
+        await sendText(from, "Neue" + (docTypeChoice === "offer" ? "s " : " ") + docLabelChoice + "\n\nGib den Namen des Kunden ein um in Bexio zu suchen.\nOder schreibe *neu* um einen neuen Kontakt anzulegen.");
       } else if (choice === "edit_draft" || text.includes("entwurf") || text.includes("bearbeiten")) {
         if (!tenant || !tenant.bexio_access_token) {
           await sendText(from, "Bexio ist noch nicht verbunden. Bitte verbinde zuerst dein Bexio-Konto.");
@@ -226,12 +243,14 @@ Deno.serve(async (req: Request) => {
         }
       } else {
         await sendButtons(from, "Bitte wähle:", [
-          { id: "new_invoice", title: "Neue Rechnung" },
+          { id: "new_invoice", title: "Neue" + (docTypeChoice === "offer" ? "s " : " ") + docLabelChoice },
           { id: "edit_draft", title: "Entwurf bearbeiten" },
         ]);
       }
 
     } else if (step === "draft_search") {
+      var draftDocType: DocType = (session.bexio_document_type === "offer") ? "offer" : "invoice";
+      var draftDocLabel = docLabel(draftDocType);
       if (!tenant || !tenant.bexio_access_token) {
         await sendText(from, "Bexio ist noch nicht verbunden.");
       } else if (msgBody.length < 2 && text !== "alle") {
@@ -239,10 +258,10 @@ Deno.serve(async (req: Request) => {
       } else {
         try {
           await sendText(from, "Entwürfe werden geladen...");
-          var allDrafts = await bexioListDraftInvoices(tenant);
+          var allDrafts = await bexioListDrafts(tenant, draftDocType);
           if (allDrafts.length === 0) {
-            await sendButtons(from, "Keine Entwurfs-Rechnungen in Bexio gefunden.", [
-              { id: "new_invoice", title: "Neue Rechnung" },
+            await sendButtons(from, "Keine Entwürfe in Bexio gefunden.", [
+              { id: "new_invoice", title: "Neue" + (draftDocType === "offer" ? "s " : " ") + draftDocLabel },
               { id: "reset", title: "Abbrechen" },
             ]);
             await updateStep(session.id, "invoice_choice");
@@ -294,7 +313,7 @@ Deno.serve(async (req: Request) => {
                 if (inv.title) { desc = inv.title + " | " + desc; }
                 dRows.push({
                   id: "draft_" + inv.id,
-                  title: (inv.document_nr || "Rechnung " + inv.id).slice(0, 24),
+                  title: (inv.document_nr || (draftDocLabel + " " + inv.id)).slice(0, 24),
                   description: desc.slice(0, 72),
                 });
               });
@@ -322,6 +341,8 @@ Deno.serve(async (req: Request) => {
       }
 
     } else if (step === "draft_select") {
+      var selectDocType: DocType = (session.bexio_document_type === "offer") ? "offer" : "invoice";
+      var selectDocLabel = docLabel(selectDocType);
       var draftMatch = (buttonId || listId || "").match(/^draft_(\d+)$/);
       if (draftMatch) {
         var draftId = parseInt(draftMatch[1], 10);
@@ -330,7 +351,7 @@ Deno.serve(async (req: Request) => {
         if (selectedDraft) {
           await supabase.from("sessions_handwerker").update({
             bexio_invoice_id: draftId,
-            invoice_title: selectedDraft.title || "Rechnung",
+            invoice_title: selectedDraft.title || selectDocLabel,
             invoice_data: { document_nr: selectedDraft.document_nr, total: selectedDraft.total },
             step: "draft_position_desc", updated_at: new Date().toISOString(),
           }).eq("id", session.id);
@@ -383,6 +404,7 @@ Deno.serve(async (req: Request) => {
     } else if (step === "draft_position_price") {
       var dPriceText = msgBody.replace("'", "").replace(",", ".");
       var dPrice = parseFloat(dPriceText);
+      var draftPosDocType: DocType = (session.bexio_document_type === "offer") ? "offer" : "invoice";
       if (isNaN(dPrice) || dPrice <= 0) {
         await sendText(from, "Bitte gib einen gültigen Preis ein (z.B. 150.00).");
       } else if (!tenant || !session.bexio_invoice_id) {
@@ -394,13 +416,13 @@ Deno.serve(async (req: Request) => {
             ? session.current_position_amount
             : parseFloat(session.current_position_amount || "1");
           if (isNaN(dAmt) || dAmt <= 0) dAmt = 1;
-          await bexioAddInvoicePosition(tenant, session.bexio_invoice_id, {
+          await bexioAddDocumentPosition(tenant, session.bexio_invoice_id, draftPosDocType, {
             description: session.current_position_desc || "",
             amount: dAmt,
             unit: session.current_position_unit || "",
             price: dPrice,
           });
-          var updated = await bexioGetInvoice(tenant, session.bexio_invoice_id);
+          var updated = await bexioGetDocument(tenant, session.bexio_invoice_id, draftPosDocType);
           await supabase.from("sessions_handwerker").update({
             current_position_desc: null, current_position_price: null,
             current_position_amount: null, current_position_unit: null,
@@ -502,13 +524,14 @@ Deno.serve(async (req: Request) => {
           }
         }
         if (contactId > 0) {
+          var cSelDocType: DocType = (session.bexio_document_type === "offer") ? "offer" : "invoice";
           await supabase.from("sessions_handwerker").update({
             bexio_contact_id: contactId,
             contact_data: { name: contactName },
             step: "invoice_title",
             updated_at: new Date().toISOString(),
           }).eq("id", session.id);
-          await sendText(from, "Kontakt: *" + contactName + "*\n\nWie soll die Rechnung heissen? (Titel)");
+          await sendText(from, "Kontakt: *" + contactName + "*\n\nWie soll " + (cSelDocType === "offer" ? "das Angebot" : "die Rechnung") + " heissen? (Titel)");
         } else {
           await sendText(from, "Bitte wähle einen Kontakt aus der Liste.");
         }
@@ -545,7 +568,8 @@ Deno.serve(async (req: Request) => {
               contact_data: { name: newContact.name_1 },
               step: "invoice_title", updated_at: new Date().toISOString(),
             }).eq("id", session.id);
-            await sendText(from, "Kontakt *" + newContact.name_1 + "* erstellt (ID: " + newContact.id + ")\n\nWie soll die Rechnung heissen? (Titel)");
+            var skipDocType: DocType = (session.bexio_document_type === "offer") ? "offer" : "invoice";
+            await sendText(from, "Kontakt *" + newContact.name_1 + "* erstellt (ID: " + newContact.id + ")\n\nWie soll " + (skipDocType === "offer" ? "das Angebot" : "die Rechnung") + " heissen? (Titel)");
           } catch (err: any) {
             console.error("[Contact create] Error:", err);
             await sendText(from, "Fehler beim Erstellen des Kontakts:\n" + (err?.message || String(err)));
@@ -582,7 +606,8 @@ Deno.serve(async (req: Request) => {
             contact_data: { name: newContact.name_1, city: newContact.city || city },
             step: "invoice_title", updated_at: new Date().toISOString(),
           }).eq("id", session.id);
-          await sendText(from, "Kontakt *" + newContact.name_1 + "* erstellt (ID: " + newContact.id + ")\n\nWie soll die Rechnung heissen? (Titel)");
+          var newAddrDocType: DocType = (session.bexio_document_type === "offer") ? "offer" : "invoice";
+          await sendText(from, "Kontakt *" + newContact.name_1 + "* erstellt (ID: " + newContact.id + ")\n\nWie soll " + (newAddrDocType === "offer" ? "das Angebot" : "die Rechnung") + " heissen? (Titel)");
         } catch (err: any) {
           console.error("[Contact create] Error:", err);
           await sendText(from, "Fehler beim Erstellen des Kontakts:\n" + (err?.message || String(err)));
@@ -590,8 +615,9 @@ Deno.serve(async (req: Request) => {
       }
 
     } else if (step === "invoice_title") {
+      var titleDocType: DocType = (session.bexio_document_type === "offer") ? "offer" : "invoice";
       if (!msgBody) {
-        await sendText(from, "Bitte gib einen Titel für die Rechnung ein.");
+        await sendText(from, "Bitte gib einen Titel für " + (titleDocType === "offer" ? "das Angebot" : "die Rechnung") + " ein.");
       } else {
         await supabase.from("sessions_handwerker").update({
           invoice_title: msgBody, step: "position_desc", updated_at: new Date().toISOString(),
@@ -668,6 +694,8 @@ Deno.serve(async (req: Request) => {
       }
 
     } else if (step === "position_more") {
+      var morePosDocType: DocType = (session.bexio_document_type === "offer") ? "offer" : "invoice";
+      var morePosDocLabel = docLabel(morePosDocType);
       if (choice === "add_more" || text === "ja" || text === "weitere") {
         await updateStep(session.id, "position_desc");
         await sendText(from, "Beschreibe die nächste Position:");
@@ -679,7 +707,7 @@ Deno.serve(async (req: Request) => {
         }, 0);
         var cData = session.contact_data as any;
         var cName = cData ? cData.name : ("ID " + session.bexio_contact_id);
-        var summary = "*Rechnungs-Zusammenfassung*\n\n";
+        var summary = "*" + morePosDocLabel + "s-Zusammenfassung*\n\n";
         summary += "Titel: " + session.invoice_title + "\n";
         summary += "Kunde: " + cName + "\n\n";
         positions2.forEach(function (p: any, i: number) {
@@ -688,47 +716,50 @@ Deno.serve(async (req: Request) => {
         summary += "\n*Total: CHF " + total2.toFixed(2) + "*";
         await sendText(from, summary);
         await updateStep(session.id, "invoice_confirm");
-        await sendButtons(from, "Rechnung jetzt in Bexio erstellen?", [
+        await sendButtons(from, morePosDocLabel + " jetzt in Bexio erstellen?", [
           { id: "confirm_invoice", title: "Ja, erstellen" },
           { id: "cancel_invoice", title: "Abbrechen" },
         ]);
       } else {
         await sendButtons(from, "Was möchtest du tun?", [
           { id: "add_more", title: "Weitere Position" },
-          { id: "finish", title: "Rechnung erstellen" },
+          { id: "finish", title: morePosDocLabel + " erstellen" },
         ]);
       }
 
     } else if (step === "invoice_confirm") {
+      var confirmDocType: DocType = (session.bexio_document_type === "offer") ? "offer" : "invoice";
+      var confirmDocLabel = docLabel(confirmDocType);
       if (choice === "cancel_invoice" || text === "abbrechen" || text === "nein") {
         await resetSession(session.id);
-        await sendText(from, "Rechnung abgebrochen. Schreibe etwas um neu zu starten.");
+        await sendText(from, confirmDocLabel + " abgebrochen. Schreibe etwas um neu zu starten.");
       } else if (choice === "confirm_invoice" || text === "ja" || text === "ok") {
         if (tenant) {
-          await sendText(from, "Rechnung wird in Bexio erstellt...");
+          await sendText(from, confirmDocLabel + " wird in Bexio erstellt...");
           try {
-            var invoice = await bexioCreateInvoice(tenant, {
+            var invoice = await bexioCreateDocument(tenant, {
               contactId: session.bexio_contact_id,
-              title: session.invoice_title || "Rechnung",
+              title: session.invoice_title || confirmDocLabel,
               positions: session.manual_positions || [],
-            });
-            // NICHT issuen — bleibt als Entwurf, damit später Positionen ergaenzt werden koennen
+            }, confirmDocType);
+            // NICHT issuen — bleibt als Entwurf, damit später Positionen ergänzt werden können
+            var docArticle = confirmDocType === "offer" ? "Das" : "Die";
             await sendText(from,
               "*Entwurf erstellt!*\n\n" +
-              "Rechnungs-Nr: " + invoice.document_nr + "\n" +
+              confirmDocLabel + "s-Nr: " + invoice.document_nr + "\n" +
               "Total: CHF " + invoice.total + "\n\n" +
-              "Die Rechnung ist als *Entwurf* in Bexio gespeichert.\n" +
-              "Du kannst später weitere Positionen hinzufügen über *Rechnung erstellen -> Entwurf bearbeiten*."
+              docArticle + " " + confirmDocLabel + " ist als *Entwurf* in Bexio gespeichert.\n" +
+              "Du kannst später weitere Positionen hinzufügen über *" + confirmDocLabel + " erstellen -> Entwurf bearbeiten*."
             );
-            try { await sendEmailNotification(tenant.email, invoice.document_nr, invoice.total); } catch (_e) { /* ok */ }
+            try { await sendEmailNotification(tenant.email, invoice.document_nr, invoice.total, confirmDocType); } catch (_e) { /* ok */ }
           } catch (invErr) {
-            console.error("Invoice error:", invErr);
-            await sendText(from, "Fehler beim Erstellen der Rechnung:\n\n" + String(invErr).slice(0, 300) + "\n\nBitte prüfe deine Bexio-Verbindung.");
+            console.error(confirmDocLabel + " error:", invErr);
+            await sendText(from, "Fehler beim Erstellen " + (confirmDocType === "offer" ? "des Angebots" : "der Rechnung") + ":\n\n" + String(invErr).slice(0, 300) + "\n\nBitte prüfe deine Bexio-Verbindung.");
           }
           await resetSession(session.id);
         }
       } else {
-        await sendButtons(from, "Rechnung erstellen?", [
+        await sendButtons(from, confirmDocLabel + " erstellen?", [
           { id: "confirm_invoice", title: "Ja, erstellen" },
           { id: "cancel_invoice", title: "Abbrechen" },
         ]);
@@ -761,6 +792,7 @@ Deno.serve(async (req: Request) => {
       await updateStep(session.id, "main_menu");
       await sendButtons(from, "Bitte wähle:", [
         { id: "invoice", title: "Rechnung erstellen" },
+        { id: "offer", title: "Angebot erstellen" },
         { id: "search", title: "Kontakt suchen" },
       ]);
     }
@@ -857,6 +889,7 @@ async function resetSession(sessionId: string): Promise<void> {
   await supabase.from("sessions_handwerker").update({
     step: "start", contact_data: null, bexio_contact_id: null, bexio_invoice_id: null,
     bexio_invoice_nr: null, invoice_title: null, invoice_data: null, manual_positions: null,
+    bexio_document_type: "invoice",
     current_position_desc: null, current_position_price: null,
     current_position_amount: null, current_position_unit: null,
     receipt_data: null,
@@ -1224,8 +1257,27 @@ function isBexioIdValidationError(errText: string): boolean {
     || t.indexOf("user_id") >= 0;
 }
 
-async function bexioCreateInvoice(tenant: any, params: { contactId: number; title: string; positions: any[] }): Promise<any> {
+// docType "invoice" maps to Bexio /2.0/kb_invoice, "offer" to /2.0/kb_offer.
+// UI labels and a few request fields differ, but the tax-fallback, position
+// shape, and response shape are identical — so one function can handle both.
+type DocType = "invoice" | "offer";
+
+function docEndpoint(docType: DocType): string {
+  return docType === "offer" ? "kb_offer" : "kb_invoice";
+}
+
+function docLabel(docType: DocType): string {
+  return docType === "offer" ? "Angebot" : "Rechnung";
+}
+
+async function bexioCreateDocument(
+  tenant: any,
+  params: { contactId: number; title: string; positions: any[] },
+  docType: DocType,
+): Promise<any> {
   var token = await getBexioToken(tenant);
+  var endpoint = docEndpoint(docType);
+  var label = docLabel(docType);
 
   // Build a single prioritized list of tax options to try in sequence:
   //   1. Cached tax_id (if set)
@@ -1250,7 +1302,7 @@ async function bexioCreateInvoice(tenant: any, params: { contactId: number; titl
       var amt = typeof p.amount === "number" ? p.amount : parseFloat(p.amount || "1");
       if (isNaN(amt) || amt <= 0) amt = 1;
       // Embed the unit in the position text so it appears on the printed
-      // invoice. Proper unit_id lookup via /2.0/unit could come later.
+      // document. Proper unit_id lookup via /2.0/unit could come later.
       var txt = p.description || "";
       if (p.unit) txt = txt + " (" + p.unit + ")";
       var pos: any = {
@@ -1269,12 +1321,12 @@ async function bexioCreateInvoice(tenant: any, params: { contactId: number; titl
     };
   }
 
-  async function postWithTax(taxOverride: number | null, label: string): Promise<{ ok: boolean; body: any; status: number; errText: string }> {
-    console.log("[Bexio] Creating invoice (" + label + ")", {
+  async function postWithTax(taxOverride: number | null, attemptLabel: string): Promise<{ ok: boolean; body: any; status: number; errText: string }> {
+    console.log("[Bexio] Creating " + label + " (" + attemptLabel + ")", {
       userId: ids.userId, accountId: ids.accountId,
       taxId: taxOverride == null ? "(omitted)" : taxOverride,
     });
-    var resp = await fetch("https://api.bexio.com/2.0/kb_invoice", {
+    var resp = await fetch("https://api.bexio.com/2.0/" + endpoint, {
       method: "POST",
       headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(buildBody(taxOverride)),
@@ -1283,7 +1335,7 @@ async function bexioCreateInvoice(tenant: any, params: { contactId: number; titl
       return { ok: true, body: await resp.json(), status: resp.status, errText: "" };
     }
     var errText = await resp.text();
-    console.warn("[Bexio] Invoice attempt (" + label + ") failed:", resp.status, errText.slice(0, 200));
+    console.warn("[Bexio] " + label + " attempt (" + attemptLabel + ") failed:", resp.status, errText.slice(0, 200));
     return { ok: false, body: null, status: resp.status, errText: errText };
   }
 
@@ -1303,7 +1355,7 @@ async function bexioCreateInvoice(tenant: any, params: { contactId: number; titl
     if (first.ok) { await persistWinningTax(ids.taxId); return first.body; }
     // If failure is not a tax_id validation, don't bother iterating.
     if (first.status !== 422 || !/tax_id/i.test(first.errText)) {
-      throw new Error("Bexio Rechnung (" + first.status + "): " + first.errText.slice(0, 300));
+      throw new Error("Bexio " + label + " (" + first.status + "): " + first.errText.slice(0, 300));
     }
   }
 
@@ -1337,13 +1389,14 @@ async function bexioCreateInvoice(tenant: any, params: { contactId: number; titl
   var noTax = await postWithTax(null, "no tax_id");
   if (noTax.ok) return noTax.body;
 
-  console.error("[Bexio] Invoice create error after all attempts:", noTax.status, noTax.errText);
-  throw new Error("Bexio Rechnung (" + noTax.status + "): " + noTax.errText.slice(0, 300));
+  console.error("[Bexio] " + label + " create error after all attempts:", noTax.status, noTax.errText);
+  throw new Error("Bexio " + label + " (" + noTax.status + "): " + noTax.errText.slice(0, 300));
 }
 
-async function bexioIssueInvoice(tenant: any, invoiceId: number): Promise<void> {
+async function bexioIssueDocument(tenant: any, docId: number, docType: DocType): Promise<void> {
   var token = await getBexioToken(tenant);
-  await fetch("https://api.bexio.com/2.0/kb_invoice/" + invoiceId + "/issue", {
+  var endpoint = docEndpoint(docType);
+  await fetch("https://api.bexio.com/2.0/" + endpoint + "/" + docId + "/issue", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, Accept: "application/json" },
   });
@@ -1360,11 +1413,14 @@ async function bexioGetContact(tenant: any, contactId: number): Promise<any> {
   return resp.json();
 }
 
-async function bexioListDraftInvoices(tenant: any): Promise<any[]> {
+async function bexioListDrafts(tenant: any, docType: DocType): Promise<any[]> {
   var token = await getBexioToken(tenant);
-  console.log("[Bexio] Listing draft invoices...");
-  // kb_item_status_id = 7 = Draft (Entwurf) in Bexio
-  var resp = await fetch("https://api.bexio.com/2.0/kb_invoice/search?limit=50&order_by=id_desc", {
+  var endpoint = docEndpoint(docType);
+  var label = docLabel(docType);
+  console.log("[Bexio] Listing draft " + label + "s...");
+  // kb_item_status_id = 7 = Draft (Entwurf) in Bexio — same for kb_invoice
+  // and kb_offer.
+  var resp = await fetch("https://api.bexio.com/2.0/" + endpoint + "/search?limit=50&order_by=id_desc", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify([{ field: "kb_item_status_id", value: 7, criteria: "=" }]),
@@ -1383,23 +1439,28 @@ async function bexioListDraftInvoices(tenant: any): Promise<any[]> {
   return data;
 }
 
-async function bexioGetInvoice(tenant: any, invoiceId: number): Promise<any> {
+async function bexioGetDocument(tenant: any, docId: number, docType: DocType): Promise<any> {
   var token = await getBexioToken(tenant);
-  var resp = await fetch("https://api.bexio.com/2.0/kb_invoice/" + invoiceId, {
+  var endpoint = docEndpoint(docType);
+  var label = docLabel(docType);
+  var resp = await fetch("https://api.bexio.com/2.0/" + endpoint + "/" + docId, {
     headers: { Authorization: "Bearer " + token, Accept: "application/json" },
   });
   if (!resp.ok) {
-    throw new Error("Bexio Rechnung laden fehlgeschlagen (" + resp.status + ")");
+    throw new Error("Bexio " + label + " laden fehlgeschlagen (" + resp.status + ")");
   }
   return resp.json();
 }
 
-async function bexioAddInvoicePosition(
+async function bexioAddDocumentPosition(
   tenant: any,
-  invoiceId: number,
+  docId: number,
+  docType: DocType,
   pos: { description: string; price: number; amount?: number; unit?: string },
 ): Promise<any> {
   var token = await getBexioToken(tenant);
+  var endpoint = docEndpoint(docType);
+  var label = docLabel(docType);
 
   var addAmt = typeof pos.amount === "number" ? pos.amount : parseFloat(String(pos.amount || "1"));
   if (isNaN(addAmt) || addAmt <= 0) addAmt = 1;
@@ -1425,18 +1486,18 @@ async function bexioAddInvoicePosition(
     return body;
   }
 
-  async function postPos(taxOverride: number | null, label: string) {
-    console.log("[Bexio] Adding position to invoice", invoiceId, "(" + label + ")", {
+  async function postPos(taxOverride: number | null, attemptLabel: string) {
+    console.log("[Bexio] Adding position to " + label + " " + docId + " (" + attemptLabel + ")", {
       taxId: taxOverride == null ? "(omitted)" : taxOverride,
     });
-    var resp = await fetch("https://api.bexio.com/2.0/kb_invoice/" + invoiceId + "/kb_position_custom", {
+    var resp = await fetch("https://api.bexio.com/2.0/" + endpoint + "/" + docId + "/kb_position_custom", {
       method: "POST",
       headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(buildPosBody(taxOverride)),
     });
     if (resp.ok) return { ok: true, body: await resp.json(), status: resp.status, errText: "" };
     var errText = await resp.text();
-    console.warn("[Bexio] Add position (" + label + ") failed:", resp.status, errText.slice(0, 200));
+    console.warn("[Bexio] Add position (" + attemptLabel + ") failed:", resp.status, errText.slice(0, 200));
     return { ok: false, body: null, status: resp.status, errText: errText };
   }
 
@@ -1620,15 +1681,17 @@ async function handleReceiptUpload(from: string, session: any, tenant: any, medi
 
 // ===== Email =====
 
-async function sendEmailNotification(email: string, invoiceNr: string, total: string): Promise<void> {
+async function sendEmailNotification(email: string, docNr: string, total: string, docType: DocType = "invoice"): Promise<void> {
+  var label = docLabel(docType);
+  var articleNom = docType === "offer" ? "Das" : "Die";
   await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: "Bearer " + Deno.env.get("RESEND_API_KEY")!, "Content-Type": "application/json" },
     body: JSON.stringify({
       from: "WhatsApp Handwerker <noreply@resend.dev>",
       to: email,
-      subject: "Rechnung " + invoiceNr + " erstellt",
-      html: "<h2>Neue Rechnung erstellt</h2><p>Rechnungs-Nr: <strong>" + invoiceNr + "</strong></p><p>Total: CHF " + total + "</p><p>Die Rechnung findest du in deinem Bexio-Konto.</p>",
+      subject: label + " " + docNr + " erstellt",
+      html: "<h2>Neue" + (docType === "offer" ? "s " : " ") + label + " erstellt</h2><p>" + label + "s-Nr: <strong>" + docNr + "</strong></p><p>Total: CHF " + total + "</p><p>" + articleNom + " " + label + " findest du in deinem Bexio-Konto.</p>",
     }),
   });
 }
