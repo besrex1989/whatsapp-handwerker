@@ -13,109 +13,118 @@
     <div class="container nav-container">
       <a href="/" class="logo">Whats<span>Bill</span></a>
       <div class="nav-links">
-        <span id="user-email" style="color: var(--gray); font-size: 14px;"></span>
+        <span id="user-email" class="user-email"></span>
         <button class="logout-btn" onclick="handleLogout()">Abmelden</button>
       </div>
     </div>
   </nav>
 
   <div class="dashboard">
-    <!-- Header -->
-    <div class="dashboard-header">
-      <div class="container">
-        <h1 id="greeting">Willkommen!</h1>
-        <p>Dein WhatsBill Dashboard</p>
-      </div>
-    </div>
-
-    <!-- Content -->
     <div class="container">
+
+      <!-- Header -->
+      <div class="dashboard-header">
+        <h1 id="greeting">Willkommen</h1>
+        <p>Dein Dashboard</p>
+      </div>
+
       <div class="dashboard-grid">
 
-        <!-- Konto Status -->
+        <!-- Konto -->
         <div class="dash-card">
-          <h3>Konto Status</h3>
-          <div class="dash-info">Name</div>
-          <div class="dash-value" id="tenant-name">—</div>
-          <div class="dash-info">E-Mail</div>
-          <div class="dash-value" id="tenant-email">—</div>
-          <div class="dash-info">Plan</div>
-          <div class="dash-value"><span id="plan-badge" class="status-badge trial">Trial</span></div>
-          <div class="dash-info">Trial endet</div>
-          <div class="dash-value" id="trial-end">—</div>
-          <div class="dash-info">WhatsApp Nummer</div>
-          <div class="dash-value" id="whatsapp-nr">—</div>
-          <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
-            <button class="btn btn-outline" style="font-size: 13px; padding: 6px 12px;" onclick="changeFullName()">Name ändern</button>
-            <button class="btn btn-outline" style="font-size: 13px; padding: 6px 12px;" onclick="changeEmail()">E-Mail ändern</button>
-            <button class="btn btn-outline" style="font-size: 13px; padding: 6px 12px;" onclick="changeWhatsappNumber()">Nummer ändern</button>
+          <h3>Konto</h3>
+          <div class="dash-row">
+            <span class="label">Name</span>
+            <span class="value" id="tenant-name">—</span>
+          </div>
+          <div class="dash-row">
+            <span class="label">E-Mail</span>
+            <span class="value" id="tenant-email">—</span>
+          </div>
+          <div class="dash-row">
+            <span class="label">Plan</span>
+            <span class="value"><span id="plan-badge" class="status-badge trial">Trial</span></span>
+          </div>
+          <div class="dash-row">
+            <span class="label">Trial endet</span>
+            <span class="value" id="trial-end">—</span>
+          </div>
+          <div class="dash-row">
+            <span class="label">WhatsApp</span>
+            <span class="value" id="whatsapp-nr">—</span>
+          </div>
+          <div class="dash-actions">
+            <button class="btn btn-outline" onclick="changeFullName()">Name</button>
+            <button class="btn btn-outline" onclick="changeEmail()">E-Mail</button>
+            <button class="btn btn-outline" onclick="changeWhatsappNumber()">Nummer</button>
           </div>
         </div>
 
         <!-- Abo -->
         <div class="dash-card">
           <h3>Abo</h3>
-          <div id="subscription-info" style="color: var(--gray); font-size: 14px; margin-bottom: 16px;">
+          <div id="subscription-info" class="help-text" style="margin-bottom: 14px;">
             Lädt...
           </div>
-          <div id="subscription-actions" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+          <div id="subscription-actions" class="dash-actions"></div>
         </div>
 
-        <!-- Bexio Verbindung -->
+        <!-- Bexio -->
         <div class="dash-card">
           <h3>Bexio Verbindung</h3>
-          <div class="dash-info">Status</div>
-          <div class="dash-value"><span id="bexio-status" class="status-badge inactive">Nicht verbunden</span></div>
-          <div style="margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap;">
-            <button id="bexio-connect-btn" class="btn btn-primary" onclick="connectBexio()">Mit Bexio verbinden</button>
-            <button id="bexio-disconnect-btn" class="btn btn-outline" onclick="disconnectBexio()" style="display: none;">Verbindung trennen</button>
+          <div class="dash-row">
+            <span class="label">Status</span>
+            <span class="value"><span id="bexio-status" class="status-badge inactive">Nicht verbunden</span></span>
+          </div>
+          <div class="dash-actions">
+            <button id="bexio-connect-btn" class="btn btn-primary" onclick="connectBexio()">Verbinden</button>
+            <button id="bexio-disconnect-btn" class="btn btn-outline" onclick="disconnectBexio()" style="display: none;">Trennen</button>
           </div>
 
-          <!-- Erlöskonto Preference (only shown when Bexio is connected) -->
-          <div id="bexio-account-block" style="display: none; margin-top: 20px; padding-top: 16px; border-top: 1px solid #eee;">
-            <div class="dash-info">Erlöskonto</div>
-            <div class="dash-value" id="bexio-account-current" style="font-size: 14px;">Automatisch</div>
-            <p style="color: var(--gray); font-size: 13px; margin-top: 4px; line-height: 1.5;">
-              Standard ist automatische Erkennung (bevorzugt 3400 Dienstleistungsertrag, dann 3200, 3000).
-              Wähle dein Konto, falls du einen anderen Ertrag buchen willst.
+          <div id="bexio-account-block" class="account-block" style="display: none;">
+            <div class="dash-row">
+              <span class="label">Erlöskonto</span>
+              <span class="value" id="bexio-account-current">Automatisch</span>
+            </div>
+            <p class="help-text">
+              Standard ist automatische Erkennung (3400, dann 3200, 3000).
+              Wähle ein anderes Konto, falls gewünscht.
             </p>
-            <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-              <select id="bexio-account-select" style="flex: 1; min-width: 200px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+            <div class="account-select-row">
+              <select id="bexio-account-select">
                 <option value="">Lädt...</option>
               </select>
-              <button class="btn btn-primary" style="font-size: 13px; padding: 6px 12px;" onclick="saveRevenueAccountPreference()">Speichern</button>
+              <button class="btn btn-primary" onclick="saveRevenueAccountPreference()">Speichern</button>
             </div>
           </div>
         </div>
 
-        <!-- WhatsApp Bot -->
+        <!-- Bot -->
         <div class="dash-card">
           <h3>WhatsApp Bot</h3>
-          <p style="color: var(--gray); margin-bottom: 16px;">
-            Sende eine Nachricht an den Bot um loszulegen:
+          <p class="help-text" style="margin-top: 0; margin-bottom: 10px;">
+            Sende eine Nachricht an den Bot um loszulegen.
           </p>
-          <div class="dash-value" id="bot-number" style="font-size: 20px;">+41 ...</div>
-          <div style="margin-top: 12px;">
-            <a id="bot-whatsapp-link" href="#" target="_blank" rel="noopener"
-               class="btn btn-primary"
-               style="display: inline-block; text-decoration: none;">
+          <div class="bot-number dash-value" id="bot-number">+41 ...</div>
+          <div class="dash-actions">
+            <a id="bot-whatsapp-link" href="#" target="_blank" rel="noopener" class="btn btn-primary">
               Auf WhatsApp öffnen
             </a>
           </div>
-          <p style="color: var(--gray); font-size: 14px; margin-top: 8px;">
-            Schreibe <strong>hilfe</strong> für eine Übersicht der Befehle.
+          <p class="help-text">
+            Schreibe <code style="font-family: 'SF Mono', Menlo, monospace; background: var(--bg-alt); border: 1px solid var(--border); padding: 1px 6px; border-radius: 4px; font-size: 12px;">hilfe</code> für eine Übersicht.
           </p>
         </div>
 
         <!-- Schnellstart -->
         <div class="dash-card">
           <h3>Schnellstart</h3>
-          <div style="color: var(--gray); font-size: 15px; line-height: 1.8;">
-            <p><strong>1.</strong> Verbinde dein Bexio-Konto</p>
-            <p><strong>2.</strong> Speichere die Bot-Nummer in deinen Kontakten</p>
-            <p><strong>3.</strong> Schreibe <strong>rechnung</strong> um deine erste Rechnung zu erstellen</p>
-            <p><strong>4.</strong> Mit <strong>Entwurf bearbeiten</strong> kannst du später weitere Positionen ergänzen</p>
-          </div>
+          <ol class="quickstart-list">
+            <li>Verbinde dein Bexio-Konto</li>
+            <li>Speichere die Bot-Nummer in deinen Kontakten</li>
+            <li>Schreibe <code>rechnung</code> oder <code>angebot</code></li>
+            <li>Mit <code>entwurf</code> später weitere Positionen ergänzen</li>
+          </ol>
         </div>
 
       </div>
