@@ -1315,10 +1315,21 @@ async function bexioCreateDocument(
       if (taxOverride != null) pos.tax_id = taxOverride;
       return pos;
     });
-    return {
+    // Bexio field naming differs between endpoints:
+    //   - kb_invoice uses `is_valid_to`
+    //   - kb_offer uses `is_valid_until`
+    // Sending the wrong key yields "Unexpected extra form field" and aborts
+    // the whole request (including the tax-candidate retry loop).
+    var body: any = {
       title: params.title, contact_id: params.contactId, user_id: ids.userId,
-      is_valid_from: today, is_valid_to: dueDate, mwst_type: 0, mwst_is_net: true, positions: positionItems,
+      is_valid_from: today, mwst_type: 0, mwst_is_net: true, positions: positionItems,
     };
+    if (docType === "offer") {
+      body.is_valid_until = dueDate;
+    } else {
+      body.is_valid_to = dueDate;
+    }
+    return body;
   }
 
   async function postWithTax(taxOverride: number | null, attemptLabel: string): Promise<{ ok: boolean; body: any; status: number; errText: string }> {
