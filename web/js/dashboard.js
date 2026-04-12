@@ -268,7 +268,7 @@ function renderSubscriptionCard(tenant, planRaw, isActive) {
   actionsEl.innerHTML = "";
 
   if (isActive) {
-    var planLabel = planRaw === "active_yearly" ? "Jaehrlich (228 CHF / Jahr)"
+    var planLabel = planRaw === "active_yearly" ? "Jaehrlich (199 CHF / Jahr)"
       : planRaw === "active_monthly" ? "Monatlich (19 CHF / Monat)"
       : "Aktiv";
     infoEl.innerHTML = "<strong>Dein Abo ist aktiv.</strong><br>Plan: " + planLabel;
@@ -311,7 +311,7 @@ function renderSubscriptionCard(tenant, planRaw, isActive) {
 
   var yearlyBtn = document.createElement("button");
   yearlyBtn.className = "btn btn-outline";
-  yearlyBtn.textContent = "Jaehrlich (228 CHF)";
+  yearlyBtn.textContent = "Jaehrlich (199 CHF)";
   yearlyBtn.onclick = function () { upgradeSubscription("yearly"); };
   actionsEl.appendChild(yearlyBtn);
 }
