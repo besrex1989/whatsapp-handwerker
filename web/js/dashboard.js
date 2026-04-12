@@ -528,6 +528,12 @@ function renderSubscriptionCard(tenant, planRaw, isActive) {
 
     infoEl.innerHTML = rows + featuresList + cancelNote;
 
+    var invoicesBtn = document.createElement("button");
+    invoicesBtn.className = "btn btn-outline";
+    invoicesBtn.textContent = "Rechnungen anzeigen";
+    invoicesBtn.onclick = function () { toggleInvoicesList(invoicesBtn); };
+    actionsEl.appendChild(invoicesBtn);
+
     var manageBtn = document.createElement("button");
     manageBtn.className = "btn btn-outline";
     manageBtn.textContent = "Abo verwalten";
@@ -691,6 +697,112 @@ async function openBillingPortal() {
   } catch (err) {
     console.error("[openBillingPortal] exception:", err);
     alert("Netzwerkfehler: " + err.message);
+  }
+}
+
+// Toggles an inline list of Stripe invoices below the subscription-info
+// block. First click fetches + renders, next click collapses it.
+async function toggleInvoicesList(triggerBtn) {
+  var existing = document.getElementById("invoices-list");
+  if (existing) {
+    existing.remove();
+    triggerBtn.textContent = "Rechnungen anzeigen";
+    return;
+  }
+
+  var infoEl = document.getElementById("subscription-info");
+  if (!infoEl) return;
+
+  // Placeholder while fetching.
+  var listEl = document.createElement("div");
+  listEl.id = "invoices-list";
+  listEl.className = "invoices-list";
+  listEl.innerHTML = '<p class="help-text">Rechnungen werden geladen...</p>';
+  infoEl.parentNode.insertBefore(listEl, infoEl.nextSibling);
+
+  triggerBtn.disabled = true;
+  try {
+    var user = await checkAuth();
+    if (!user) { listEl.innerHTML = '<p class="help-text">Nicht angemeldet.</p>'; return; }
+
+    var tenantResult = await supabase
+      .from("tenants").select("id").eq("email", user.email).single();
+    if (tenantResult.error || !tenantResult.data) {
+      listEl.innerHTML = '<p class="help-text">Tenant nicht gefunden.</p>';
+      return;
+    }
+
+    var sessionResult = await supabase.auth.getSession();
+    var accessToken = sessionResult.data.session
+      ? sessionResult.data.session.access_token
+      : SUPABASE_ANON_KEY;
+
+    var resp = await fetch(SUPABASE_URL + "/functions/v1/stripe-invoices", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": "Bearer " + accessToken,
+      },
+      body: JSON.stringify({ tenant_id: tenantResult.data.id }),
+    });
+
+    if (!resp.ok) {
+      var errData = await resp.json().catch(function () { return {}; });
+      listEl.innerHTML = '<p class="help-text">Fehler: ' +
+        escapeHtml(errData.error || ("HTTP " + resp.status)) + "</p>";
+      return;
+    }
+
+    var data = await resp.json();
+    var invoices = (data && data.invoices) || [];
+    if (invoices.length === 0) {
+      listEl.innerHTML = '<p class="help-text">Noch keine Rechnungen vorhanden.</p>';
+      triggerBtn.textContent = "Liste ausblenden";
+      return;
+    }
+
+    var rows = invoices.map(function (inv) {
+      var date = inv.created ? formatDate(new Date(inv.created * 1000).toISOString()) : "—";
+      var amount = ((inv.amount_paid || inv.amount_due || 0) / 100).toFixed(2);
+      var currency = (inv.currency || "chf").toUpperCase();
+      var statusLabel = inv.status === "paid" ? "Bezahlt"
+        : inv.status === "open" ? "Offen"
+        : inv.status === "void" ? "Storniert"
+        : inv.status === "uncollectible" ? "Uneinbringlich"
+        : (inv.status || "—");
+      var statusClass = inv.status === "paid" ? "active"
+        : inv.status === "open" ? "trial"
+        : "inactive";
+      var pdfLink = inv.invoice_pdf
+        ? '<a href="' + escapeHtml(inv.invoice_pdf) + '" target="_blank" rel="noopener">PDF</a>'
+        : "";
+      var portalLink = inv.hosted_invoice_url
+        ? '<a href="' + escapeHtml(inv.hosted_invoice_url) + '" target="_blank" rel="noopener">Ansehen</a>'
+        : "";
+      var linksCell = [portalLink, pdfLink].filter(function (x) { return x; }).join(" &middot; ");
+      return '<tr>' +
+        '<td>' + escapeHtml(date) + '</td>' +
+        '<td>' + escapeHtml(inv.number || inv.id) + '</td>' +
+        '<td class="num">' + escapeHtml(currency) + " " + escapeHtml(amount) + '</td>' +
+        '<td><span class="status-badge ' + statusClass + '">' + escapeHtml(statusLabel) + '</span></td>' +
+        '<td class="links">' + linksCell + '</td>' +
+        "</tr>";
+    }).join("");
+
+    listEl.innerHTML =
+      '<table class="invoices-table">' +
+        '<thead><tr>' +
+          '<th>Datum</th><th>Nummer</th><th>Betrag</th><th>Status</th><th></th>' +
+        '</tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>';
+    triggerBtn.textContent = "Liste ausblenden";
+  } catch (err) {
+    console.error("[toggleInvoicesList]", err);
+    listEl.innerHTML = '<p class="help-text">Netzwerkfehler: ' + escapeHtml(err.message || String(err)) + "</p>";
+  } finally {
+    triggerBtn.disabled = false;
   }
 }
 
