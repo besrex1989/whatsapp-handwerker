@@ -146,6 +146,11 @@ async function disconnectBexio() {
       bexio_access_token: null,
       bexio_refresh_token: null,
       bexio_expires_at: null,
+      // Clear cached per-instance IDs as well; the next invoice creation
+      // will re-fetch them from the newly connected Bexio instance.
+      bexio_user_id: null,
+      bexio_account_id: null,
+      bexio_tax_id: null,
       updated_at: new Date().toISOString(),
     })
     .eq("email", user.email);
