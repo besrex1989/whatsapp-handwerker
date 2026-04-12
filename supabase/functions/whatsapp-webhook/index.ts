@@ -1033,60 +1033,91 @@ async function ensureBexioIds(
     }
   }
   if (!taxId) {
+    // Fetch taxes from both the /3.0 and the legacy /2.0 endpoint and merge
+    // the results. Some Bexio instances return an empty list on /3.0/taxes
+    // (observed for certain Saldosteuer tenants or when the app lacks an
+    // implicit scope) but still respond normally on /2.0/tax. We dedupe by
+    // id and feed everything into the same selector below.
     console.log("[Bexio] Fetching taxes...");
-    var taxResp = await fetch("https://api.bexio.com/3.0/taxes", {
-      headers: { Authorization: "Bearer " + token, Accept: "application/json" },
-    });
-    if (taxResp.ok) {
-      var taxes = await taxResp.json();
-      if (Array.isArray(taxes)) {
-        // Log a compact dump so we can tell effective vs Saldosteuer setups
-        // apart in the Edge Function logs if the selection goes wrong.
-        console.log("[Bexio] Taxes found:", taxes.length, JSON.stringify(
-          taxes.slice(0, 20).map(function (t: any) {
-            return { id: t.id, type: t.type, code: t.code, value: t.value, is_active: t.is_active };
-          }),
-        ));
-
-        // Bexio returns all configured taxes — the shape differs between
-        // "effektive Methode" (type=sales_tax with standard rates like 8.1)
-        // and "Saldosteuersatz" (type often still sales_tax but with the
-        // tenant-specific saldo rate; or type variants like
-        // sales_tax_saldo). Strategy: pick any active, sales-related entry
-        // with the highest positive rate. This works for both methods.
-        function isSalesLike(t: any): boolean {
-          var ty = String(t.type || "").toLowerCase();
-          // Anything that starts with "sales" is a selling-side tax
-          // (sales_tax, sales_tax_saldo, sales_tax_reduced, ...).
-          // "pre_tax" / "acquisition_tax" / etc. are input-side — skip.
-          return ty.indexOf("sales") === 0;
-        }
-        var candidates = taxes.filter(function (t: any) {
-          return t.is_active && isSalesLike(t) && parseFloat(String(t.value || "0")) > 0;
+    async function fetchTaxList(path: string): Promise<any[]> {
+      try {
+        var r = await fetch("https://api.bexio.com" + path, {
+          headers: { Authorization: "Bearer " + token, Accept: "application/json" },
         });
-        // If we found none with a positive value, relax to any active
-        // sales-like tax (covers 0%-rate-only setups).
-        if (candidates.length === 0) {
-          candidates = taxes.filter(function (t: any) {
-            return t.is_active && isSalesLike(t);
-          });
+        if (!r.ok) {
+          console.warn("[Bexio] " + path + " returned", r.status);
+          return [];
         }
-        candidates.sort(function (a: any, b: any) {
-          var va = parseFloat(String(a.value || "0"));
-          var vb = parseFloat(String(b.value || "0"));
-          return vb - va; // highest rate first
-        });
-        var sales = candidates[0] || null;
-        if (sales) {
-          console.log("[Bexio] Selected tax:", sales.id, "type=" + sales.type, "value=" + sales.value, "code=" + (sales.code || ""));
-          taxId = sales.id;
-          updated = true;
-        } else {
-          console.warn("[Bexio] No usable sales tax found. Tenant is likely not VAT-registered or has no active sales taxes; continuing without tax_id.");
-        }
+        var j = await r.json();
+        // Accept bare arrays, { data: [...] }, or { items: [...] } shapes.
+        if (Array.isArray(j)) return j;
+        if (j && Array.isArray(j.data)) return j.data;
+        if (j && Array.isArray(j.items)) return j.items;
+        console.warn("[Bexio] " + path + " returned unexpected shape:", JSON.stringify(j).slice(0, 200));
+        return [];
+      } catch (e) {
+        console.warn("[Bexio] " + path + " fetch error:", String(e));
+        return [];
       }
+    }
+    var taxes3 = await fetchTaxList("/3.0/taxes");
+    var taxes2 = await fetchTaxList("/2.0/tax");
+    var seenIds: Record<string, boolean> = {};
+    var taxes = (taxes3.concat(taxes2)).filter(function (t: any) {
+      if (!t || t.id == null) return false;
+      var key = String(t.id);
+      if (seenIds[key]) return false;
+      seenIds[key] = true;
+      return true;
+    });
+
+    // Log a compact dump so we can tell effective vs Saldosteuer setups
+    // apart in the Edge Function logs if the selection goes wrong.
+    console.log("[Bexio] Taxes found (3.0=" + taxes3.length + ", 2.0=" + taxes2.length + ", merged=" + taxes.length + "):",
+      JSON.stringify(taxes.slice(0, 20).map(function (t: any) {
+        return { id: t.id, type: t.type, code: t.code, value: t.value, is_active: t.is_active };
+      })));
+
+    // Bexio returns all configured taxes — the shape differs between
+    // "effektive Methode" (type=sales_tax with standard rates like 8.1)
+    // and "Saldosteuersatz" (type often still sales_tax but with the
+    // tenant-specific saldo rate; or type variants like sales_tax_saldo).
+    // Strategy: pick any active sales-side entry with the highest
+    // positive rate. Works for both methods.
+    function isSalesLike(t: any): boolean {
+      var ty = String(t.type || "").toLowerCase();
+      // sales_tax, sales_tax_saldo, sales_tax_reduced, ...
+      // skip pre_tax, acquisition_tax, etc. (input-side).
+      return ty.indexOf("sales") === 0;
+    }
+    // is_active missing is treated as active (some /2.0 responses omit it).
+    function isActive(t: any): boolean {
+      return t.is_active === undefined || t.is_active === null ? true : !!t.is_active;
+    }
+    var candidates = taxes.filter(function (t: any) {
+      return isActive(t) && isSalesLike(t) && parseFloat(String(t.value || "0")) > 0;
+    });
+    // Relax to any active sales-like tax if no positive-rate candidate.
+    if (candidates.length === 0) {
+      candidates = taxes.filter(function (t: any) { return isActive(t) && isSalesLike(t); });
+    }
+    // Last resort: any active tax at all (really unusual setups).
+    if (candidates.length === 0) {
+      candidates = taxes.filter(function (t: any) { return isActive(t); });
+    }
+    candidates.sort(function (a: any, b: any) {
+      var va = parseFloat(String(a.value || "0"));
+      var vb = parseFloat(String(b.value || "0"));
+      return vb - va; // highest rate first
+    });
+    var sales = candidates[0] || null;
+    if (sales) {
+      console.log("[Bexio] Selected tax:", sales.id, "type=" + sales.type, "value=" + sales.value, "code=" + (sales.code || ""));
+      taxId = sales.id;
+      updated = true;
     } else {
-      console.warn("[Bexio] /3.0/taxes returned", taxResp.status);
+      console.warn("[Bexio] No usable tax found in either /3.0/taxes or /2.0/tax. Full merged list was:",
+        JSON.stringify(taxes.slice(0, 20)));
     }
   }
   if (updated) {
