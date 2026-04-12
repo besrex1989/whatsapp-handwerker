@@ -154,7 +154,7 @@ Deno.serve(async (req: Request) => {
           // past_due, cancelled, pending, oder manuell deaktiviert
           await sendText(from,
             "Dein Konto ist nicht aktiv (" + planRaw + ").\n" +
-            "Bitte pruefe dein Abo unter https://www.whatsbill.ch/dashboard.html");
+            "Bitte prüfe dein Abo unter https://www.whatsbill.ch/dashboard.html");
           return new Response("OK", { status: 200 });
         }
       }
@@ -168,16 +168,16 @@ Deno.serve(async (req: Request) => {
 
     if (choice === "reset" || choice === "abbrechen" || choice === "neustart") {
       await resetSession(session.id);
-      await sendText(from, "Session zurueckgesetzt. Schreibe etwas um neu zu starten.");
+      await sendText(from, "Session zurückgesetzt. Schreibe etwas um neu zu starten.");
       return new Response("OK", { status: 200 });
     }
 
     if (choice === "hilfe" || choice === "help") {
       await sendText(from,
-        "*Verfuegbare Befehle:*\n\n" +
+        "*Verfügbare Befehle:*\n\n" +
         "rechnung - Neue Rechnung erstellen\n" +
         "suche - Kontakt suchen\n" +
-        "neustart - Session zuruecksetzen\n" +
+        "neustart - Session zurücksetzen\n" +
         "hilfe - Diese Hilfe anzeigen"
       );
       return new Response("OK", { status: 200 });
@@ -189,7 +189,7 @@ Deno.serve(async (req: Request) => {
 
     if (step === "start") {
       await updateStep(session.id, "main_menu");
-      await sendButtons(from, "Hallo! Was moechtest du tun?", [
+      await sendButtons(from, "Hallo! Was möchtest du tun?", [
         { id: "invoice", title: "Rechnung erstellen" },
         { id: "search", title: "Kontakt suchen" },
       ]);
@@ -197,7 +197,7 @@ Deno.serve(async (req: Request) => {
     } else if (step === "main_menu") {
       if (choice === "invoice" || choice === "1" || text.includes("rechnung")) {
         await updateStep(session.id, "invoice_choice");
-        await sendButtons(from, "Was moechtest du tun?", [
+        await sendButtons(from, "Was möchtest du tun?", [
           { id: "new_invoice", title: "Neue Rechnung" },
           { id: "edit_draft", title: "Entwurf bearbeiten" },
         ]);
@@ -205,7 +205,7 @@ Deno.serve(async (req: Request) => {
         await updateStep(session.id, "contact_search");
         await sendText(from, "Gib den Suchbegriff ein:");
       } else {
-        await sendButtons(from, "Bitte waehle eine Option:", [
+        await sendButtons(from, "Bitte wähle eine Option:", [
           { id: "invoice", title: "Rechnung erstellen" },
           { id: "search", title: "Kontakt suchen" },
         ]);
@@ -222,10 +222,10 @@ Deno.serve(async (req: Request) => {
           await sendText(from, "Bexio ist noch nicht verbunden. Bitte verbinde zuerst dein Bexio-Konto.");
         } else {
           await updateStep(session.id, "draft_search");
-          await sendText(from, "Entwurf suchen\n\nGib den Kundennamen oder Titel ein.\nOder schreibe *alle* um alle Entwuerfe zu sehen.");
+          await sendText(from, "Entwurf suchen\n\nGib den Kundennamen oder Titel ein.\nOder schreibe *alle* um alle Entwürfe zu sehen.");
         }
       } else {
-        await sendButtons(from, "Bitte waehle:", [
+        await sendButtons(from, "Bitte wähle:", [
           { id: "new_invoice", title: "Neue Rechnung" },
           { id: "edit_draft", title: "Entwurf bearbeiten" },
         ]);
@@ -238,7 +238,7 @@ Deno.serve(async (req: Request) => {
         await sendText(from, "Bitte gib mindestens 2 Buchstaben ein oder schreibe *alle*.");
       } else {
         try {
-          await sendText(from, "Entwuerfe werden geladen...");
+          await sendText(from, "Entwürfe werden geladen...");
           var allDrafts = await bexioListDraftInvoices(tenant);
           if (allDrafts.length === 0) {
             await sendButtons(from, "Keine Entwurfs-Rechnungen in Bexio gefunden.", [
@@ -282,7 +282,7 @@ Deno.serve(async (req: Request) => {
             }
 
             if (filtered.length === 0) {
-              await sendButtons(from, "Keine Entwuerfe fuer \"" + msgBody + "\" gefunden.", [
+              await sendButtons(from, "Keine Entwürfe für \"" + msgBody + "\" gefunden.", [
                 { id: "search_again_draft", title: "Nochmal suchen" },
                 { id: "reset", title: "Abbrechen" },
               ]);
@@ -298,8 +298,8 @@ Deno.serve(async (req: Request) => {
                   description: desc.slice(0, 72),
                 });
               });
-              await sendList(from, filtered.length + " Entwurf(e) gefunden:", "Entwurf waehlen", [
-                { title: "Entwuerfe", rows: dRows },
+              await sendList(from, filtered.length + " Entwurf(e) gefunden:", "Entwurf wählen", [
+                { title: "Entwürfe", rows: dRows },
               ]);
               await supabase.from("sessions_handwerker").update({
                 step: "draft_select", search_results: filtered.slice(0, 10), updated_at: new Date().toISOString(),
@@ -308,7 +308,7 @@ Deno.serve(async (req: Request) => {
           }
         } catch (draftErr) {
           console.error("[Draft Search] Error:", draftErr);
-          await sendText(from, "Fehler beim Laden der Entwuerfe: " + String(draftErr).slice(0, 200));
+          await sendText(from, "Fehler beim Laden der Entwürfe: " + String(draftErr).slice(0, 200));
         }
       }
 
@@ -335,17 +335,17 @@ Deno.serve(async (req: Request) => {
             step: "draft_position_desc", updated_at: new Date().toISOString(),
           }).eq("id", session.id);
           await sendText(from,
-            "*Entwurf geoeffnet*\n\n" +
+            "*Entwurf geöffnet*\n\n" +
             "Nr: " + (selectedDraft.document_nr || "-") + "\n" +
             "Titel: " + (selectedDraft.title || "-") + "\n" +
             "Aktuelles Total: CHF " + (selectedDraft.total || "0") + "\n\n" +
             "Beschreibe die neue Position:"
           );
         } else {
-          await sendText(from, "Entwurf nicht gefunden. Bitte waehle aus der Liste.");
+          await sendText(from, "Entwurf nicht gefunden. Bitte wähle aus der Liste.");
         }
       } else {
-        await sendText(from, "Bitte waehle einen Entwurf aus der Liste.");
+        await sendText(from, "Bitte wähle einen Entwurf aus der Liste.");
       }
 
     } else if (step === "draft_position_desc") {
@@ -384,12 +384,12 @@ Deno.serve(async (req: Request) => {
       var dPriceText = msgBody.replace("'", "").replace(",", ".");
       var dPrice = parseFloat(dPriceText);
       if (isNaN(dPrice) || dPrice <= 0) {
-        await sendText(from, "Bitte gib einen gueltigen Preis ein (z.B. 150.00).");
+        await sendText(from, "Bitte gib einen gültigen Preis ein (z.B. 150.00).");
       } else if (!tenant || !session.bexio_invoice_id) {
-        await sendText(from, "Fehler: Kein Entwurf ausgewaehlt.");
+        await sendText(from, "Fehler: Kein Entwurf ausgewählt.");
       } else {
         try {
-          await sendText(from, "Position wird hinzugefuegt...");
+          await sendText(from, "Position wird hinzugefügt...");
           var dAmt = typeof session.current_position_amount === "number"
             ? session.current_position_amount
             : parseFloat(session.current_position_amount || "1");
@@ -407,7 +407,7 @@ Deno.serve(async (req: Request) => {
             step: "draft_position_more", updated_at: new Date().toISOString(),
           }).eq("id", session.id);
           await sendButtons(from,
-            "Position hinzugefuegt!\n\nNeues Total: CHF " + (updated.total || "0"),
+            "Position hinzugefügt!\n\nNeues Total: CHF " + (updated.total || "0"),
             [
               { id: "add_more_draft", title: "Weitere Position" },
               { id: "finish_draft", title: "Fertig" },
@@ -415,19 +415,19 @@ Deno.serve(async (req: Request) => {
           );
         } catch (addErr) {
           console.error("[Draft Add Position] Error:", addErr);
-          await sendText(from, "Fehler beim Hinzufuegen: " + String(addErr).slice(0, 200));
+          await sendText(from, "Fehler beim Hinzufügen: " + String(addErr).slice(0, 200));
         }
       }
 
     } else if (step === "draft_position_more") {
       if (choice === "add_more_draft" || text === "ja" || text === "weitere") {
         await updateStep(session.id, "draft_position_desc");
-        await sendText(from, "Beschreibe die naechste Position:");
+        await sendText(from, "Beschreibe die nächste Position:");
       } else if (choice === "finish_draft" || text === "fertig" || text === "nein") {
         await sendText(from, "Fertig! Der Entwurf wurde aktualisiert. Du findest ihn in Bexio.");
         await resetSession(session.id);
       } else {
-        await sendButtons(from, "Was moechtest du tun?", [
+        await sendButtons(from, "Was möchtest du tun?", [
           { id: "add_more_draft", title: "Weitere Position" },
           { id: "finish_draft", title: "Fertig" },
         ]);
@@ -447,7 +447,7 @@ Deno.serve(async (req: Request) => {
         try {
           var contacts = await bexioSearchContacts(tenant, msgBody);
           if (contacts.length === 0) {
-            await sendButtons(from, "Keine Kontakte fuer \"" + msgBody + "\" gefunden.", [
+            await sendButtons(from, "Keine Kontakte für \"" + msgBody + "\" gefunden.", [
               { id: "new_contact", title: "Neu anlegen" },
               { id: "search_again", title: "Nochmal suchen" },
             ]);
@@ -462,7 +462,7 @@ Deno.serve(async (req: Request) => {
                 description: details.slice(0, 72),
               });
             });
-            await sendList(from, contacts.length + " Kontakt(e) gefunden:", "Kontakt waehlen", [
+            await sendList(from, contacts.length + " Kontakt(e) gefunden:", "Kontakt wählen", [
               { title: "Kontakte", rows: rows },
             ]);
             await supabase.from("sessions_handwerker").update({
@@ -510,7 +510,7 @@ Deno.serve(async (req: Request) => {
           }).eq("id", session.id);
           await sendText(from, "Kontakt: *" + contactName + "*\n\nWie soll die Rechnung heissen? (Titel)");
         } else {
-          await sendText(from, "Bitte waehle einen Kontakt aus der Liste.");
+          await sendText(from, "Bitte wähle einen Kontakt aus der Liste.");
         }
       }
 
@@ -532,7 +532,7 @@ Deno.serve(async (req: Request) => {
         await supabase.from("sessions_handwerker").update({
           step: "contact_new_address_input", updated_at: new Date().toISOString(),
         }).eq("id", session.id);
-        await sendText(from, "Gib die Adresse ein im Format:\n*Strasse Nr, PLZ Ort*\n\nZ.B. Teststrasse 14, 8000 Zuerich");
+        await sendText(from, "Gib die Adresse ein im Format:\n*Strasse Nr, PLZ Ort*\n\nZ.B. Teststrasse 14, 8000 Zürich");
       } else if (choice === "skip_address" || text === "skip") {
         if (tenant) {
           try {
@@ -552,7 +552,7 @@ Deno.serve(async (req: Request) => {
           }
         }
       } else {
-        await sendButtons(from, "Bitte waehle aus:", [
+        await sendButtons(from, "Bitte wähle aus:", [
           { id: "enter_address", title: "Ja, Adresse eingeben" },
           { id: "skip_address", title: "Ueberspringen" },
         ]);
@@ -591,7 +591,7 @@ Deno.serve(async (req: Request) => {
 
     } else if (step === "invoice_title") {
       if (!msgBody) {
-        await sendText(from, "Bitte gib einen Titel fuer die Rechnung ein.");
+        await sendText(from, "Bitte gib einen Titel für die Rechnung ein.");
       } else {
         await supabase.from("sessions_handwerker").update({
           invoice_title: msgBody, step: "position_desc", updated_at: new Date().toISOString(),
@@ -635,7 +635,7 @@ Deno.serve(async (req: Request) => {
       var priceText = msgBody.replace("'", "").replace(",", ".");
       var price = parseFloat(priceText);
       if (isNaN(price) || price <= 0) {
-        await sendText(from, "Bitte gib einen gueltigen Preis ein (z.B. 150.00).");
+        await sendText(from, "Bitte gib einen gültigen Preis ein (z.B. 150.00).");
       } else {
         var pAmt = typeof session.current_position_amount === "number"
           ? session.current_position_amount
@@ -659,7 +659,7 @@ Deno.serve(async (req: Request) => {
           step: "position_more", updated_at: new Date().toISOString(),
         }).eq("id", session.id);
         await sendButtons(from,
-          "Position hinzugefuegt!\n\nPositionen: " + positions.length + "\nTotal: CHF " + total.toFixed(2),
+          "Position hinzugefügt!\n\nPositionen: " + positions.length + "\nTotal: CHF " + total.toFixed(2),
           [
             { id: "add_more", title: "Weitere Position" },
             { id: "finish", title: "Rechnung erstellen" },
@@ -670,7 +670,7 @@ Deno.serve(async (req: Request) => {
     } else if (step === "position_more") {
       if (choice === "add_more" || text === "ja" || text === "weitere") {
         await updateStep(session.id, "position_desc");
-        await sendText(from, "Beschreibe die naechste Position:");
+        await sendText(from, "Beschreibe die nächste Position:");
       } else if (choice === "finish" || text === "fertig" || text === "nein" || text === "erstellen") {
         var positions2 = session.manual_positions || [];
         var total2 = positions2.reduce(function (s: number, p: any) {
@@ -693,7 +693,7 @@ Deno.serve(async (req: Request) => {
           { id: "cancel_invoice", title: "Abbrechen" },
         ]);
       } else {
-        await sendButtons(from, "Was moechtest du tun?", [
+        await sendButtons(from, "Was möchtest du tun?", [
           { id: "add_more", title: "Weitere Position" },
           { id: "finish", title: "Rechnung erstellen" },
         ]);
@@ -712,18 +712,18 @@ Deno.serve(async (req: Request) => {
               title: session.invoice_title || "Rechnung",
               positions: session.manual_positions || [],
             });
-            // NICHT issuen — bleibt als Entwurf, damit spaeter Positionen ergaenzt werden koennen
+            // NICHT issuen — bleibt als Entwurf, damit später Positionen ergaenzt werden koennen
             await sendText(from,
               "*Entwurf erstellt!*\n\n" +
               "Rechnungs-Nr: " + invoice.document_nr + "\n" +
               "Total: CHF " + invoice.total + "\n\n" +
               "Die Rechnung ist als *Entwurf* in Bexio gespeichert.\n" +
-              "Du kannst spaeter weitere Positionen hinzufuegen ueber *Rechnung erstellen -> Entwurf bearbeiten*."
+              "Du kannst später weitere Positionen hinzufügen über *Rechnung erstellen -> Entwurf bearbeiten*."
             );
             try { await sendEmailNotification(tenant.email, invoice.document_nr, invoice.total); } catch (_e) { /* ok */ }
           } catch (invErr) {
             console.error("Invoice error:", invErr);
-            await sendText(from, "Fehler beim Erstellen der Rechnung:\n\n" + String(invErr).slice(0, 300) + "\n\nBitte pruefe deine Bexio-Verbindung.");
+            await sendText(from, "Fehler beim Erstellen der Rechnung:\n\n" + String(invErr).slice(0, 300) + "\n\nBitte prüfe deine Bexio-Verbindung.");
           }
           await resetSession(session.id);
         }
@@ -759,7 +759,7 @@ Deno.serve(async (req: Request) => {
 
     } else {
       await updateStep(session.id, "main_menu");
-      await sendButtons(from, "Bitte waehle:", [
+      await sendButtons(from, "Bitte wähle:", [
         { id: "invoice", title: "Rechnung erstellen" },
         { id: "search", title: "Kontakt suchen" },
       ]);
@@ -1238,7 +1238,7 @@ async function bexioCreateInvoice(tenant: any, params: { contactId: number; titl
     // Try a force refresh once in case user_id/account_id are missing.
     ids = await ensureBexioIds(tenant, token, true);
     if (!ids.userId || !ids.accountId) {
-      throw new Error("Bexio-Konfiguration unvollstaendig (user_id=" + ids.userId + ", account_id=" + ids.accountId + ")");
+      throw new Error("Bexio-Konfiguration unvollständig (user_id=" + ids.userId + ", account_id=" + ids.accountId + ")");
     }
   }
 
@@ -1410,7 +1410,7 @@ async function bexioAddInvoicePosition(
   if (!ids.accountId) {
     ids = await ensureBexioIds(tenant, token, true);
     if (!ids.accountId) {
-      throw new Error("Kein Ertragskonto gefunden. Bitte pruefe deine Bexio-Konfiguration.");
+      throw new Error("Kein Ertragskonto gefunden. Bitte prüfe deine Bexio-Konfiguration.");
     }
   }
 

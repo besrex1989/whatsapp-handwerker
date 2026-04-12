@@ -158,8 +158,8 @@ async function changeEmail() {
 
   var input = prompt(
     "Neue E-Mail-Adresse eingeben:\n\n" +
-    "Wir senden dir einen Bestaetigungs-Link an die neue Adresse. " +
-    "Die Aenderung wird erst aktiv, nachdem du den Link geklickt hast.",
+    "Wir senden dir einen Bestätigungs-Link an die neue Adresse. " +
+    "Die Änderung wird erst aktiv, nachdem du den Link geklickt hast.",
     user.email || ""
   );
   if (input === null) return;
@@ -170,7 +170,7 @@ async function changeEmail() {
     return;
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input)) {
-    alert("Bitte eine gueltige E-Mail-Adresse eingeben.");
+    alert("Bitte eine gültige E-Mail-Adresse eingeben.");
     return;
   }
 
@@ -181,8 +181,8 @@ async function changeEmail() {
   }
 
   alert(
-    "Bestaetigungs-Link gesendet an " + input + ".\n\n" +
-    "Bitte klicke den Link in der E-Mail, um die Aenderung abzuschliessen. " +
+    "Bestätigungs-Link gesendet an " + input + ".\n\n" +
+    "Bitte klicke den Link in der E-Mail, um die Änderung abzuschliessen. " +
     "Danach musst du dich mit der neuen Adresse einloggen."
   );
 }
@@ -236,7 +236,7 @@ async function disconnectBexio() {
   }
 
   var btn = document.getElementById("bexio-disconnect-btn");
-  if (btn) { btn.disabled = true; btn.textContent = "Trenne..."; }
+  if (btn) { btn.disabled = true; btn.textContent = "Trennt..."; }
 
   var updateResult = await supabase
     .from("tenants")
@@ -341,7 +341,7 @@ async function connectBexio() {
   }
 }
 
-// ===== Bexio Erloeskonto Praeferenz =====
+// ===== Bexio Erlöskonto Präferenz =====
 
 // Remember the tenant id so saveRevenueAccountPreference() can reuse it
 // without having to re-query tenants.
@@ -355,7 +355,7 @@ async function loadBexioAccounts(tenantId) {
   var select = document.getElementById("bexio-account-select");
   var currentLabel = document.getElementById("bexio-account-current");
   if (!select) return;
-  select.innerHTML = '<option value="">Laedt...</option>';
+  select.innerHTML = '<option value="">Lädt...</option>';
   select.disabled = true;
 
   try {
@@ -471,8 +471,8 @@ async function saveRevenueAccountPreference() {
     }
 
     alert(accountId == null
-      ? "Erloeskonto-Vorzug entfernt — Auto-Erkennung aktiv."
-      : "Erloeskonto gespeichert. Wird bei der naechsten Rechnung verwendet.");
+      ? "Erlöskonto-Vorzug entfernt — Auto-Erkennung aktiv."
+      : "Erlöskonto gespeichert. Wird bei der nächsten Rechnung verwendet.");
     loadDashboard();
   } catch (err) {
     alert("Netzwerkfehler: " + (err && err.message ? err.message : err));
@@ -513,7 +513,7 @@ function renderSubscriptionCard(tenant, planRaw, isActive) {
     );
     if (daysLeft > 0) {
       infoEl.innerHTML = "Deine Testphase laeuft noch <strong>" + daysLeft + " Tag" +
-        (daysLeft === 1 ? "" : "e") + "</strong>. Upgrade jederzeit moeglich.";
+        (daysLeft === 1 ? "" : "e") + "</strong>. Upgrade jederzeit möglich.";
     } else {
       infoEl.innerHTML = "<strong style=\"color:#d93025\">Deine Testphase ist abgelaufen.</strong><br>" +
         "Bitte upgrade, um den Bot weiter zu nutzen.";

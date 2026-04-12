@@ -50,7 +50,7 @@ serve(async (req) => {
       : Deno.env.get("STRIPE_PRICE_ID_MONTHLY");
 
     if (!priceId) {
-      return jsonError(`Stripe Price-ID fuer Plan '${plan}' nicht konfiguriert.`, 500);
+      return jsonError(`Stripe Price-ID für Plan '${plan}' nicht konfiguriert.`, 500);
     }
 
     // Verify the caller owns this tenant. We use the anon client with the

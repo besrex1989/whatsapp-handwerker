@@ -29,7 +29,7 @@ function normalizePhoneCH(input) {
   if (!/^\+\d{8,15}$/.test(p)) {
     return {
       ok: false,
-      error: "Ungueltige Telefonnummer. Bitte im Format 076 344 98 00 oder +41 76 344 98 00 eingeben.",
+      error: "Ungültige Telefonnummer. Bitte im Format 076 344 98 00 oder +41 76 344 98 00 eingeben.",
     };
   }
   return { ok: true, phone: p };
@@ -156,8 +156,8 @@ async function handleForgotPassword(e) {
   // Always show the same success message, regardless of whether the email
   // exists — avoids leaking which emails are registered.
   successEl.textContent = "Wenn ein Konto mit dieser E-Mail existiert, "
-    + "haben wir dir einen Link zum Zuruecksetzen geschickt. "
-    + "Pruefe dein Postfach.";
+    + "haben wir dir einen Link zum Zurücksetzen geschickt. "
+    + "Prüfe dein Postfach.";
   successEl.style.display = "block";
 }
 

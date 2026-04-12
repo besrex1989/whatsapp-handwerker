@@ -46,9 +46,9 @@
           <div class="dash-info">WhatsApp Nummer</div>
           <div class="dash-value" id="whatsapp-nr">—</div>
           <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
-            <button class="btn btn-outline" style="font-size: 13px; padding: 6px 12px;" onclick="changeFullName()">Name aendern</button>
-            <button class="btn btn-outline" style="font-size: 13px; padding: 6px 12px;" onclick="changeEmail()">E-Mail aendern</button>
-            <button class="btn btn-outline" style="font-size: 13px; padding: 6px 12px;" onclick="changeWhatsappNumber()">Nummer aendern</button>
+            <button class="btn btn-outline" style="font-size: 13px; padding: 6px 12px;" onclick="changeFullName()">Name ändern</button>
+            <button class="btn btn-outline" style="font-size: 13px; padding: 6px 12px;" onclick="changeEmail()">E-Mail ändern</button>
+            <button class="btn btn-outline" style="font-size: 13px; padding: 6px 12px;" onclick="changeWhatsappNumber()">Nummer ändern</button>
           </div>
         </div>
 
@@ -56,7 +56,7 @@
         <div class="dash-card">
           <h3>Abo</h3>
           <div id="subscription-info" style="color: var(--gray); font-size: 14px; margin-bottom: 16px;">
-            Laedt...
+            Lädt...
           </div>
           <div id="subscription-actions" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
         </div>
@@ -71,17 +71,17 @@
             <button id="bexio-disconnect-btn" class="btn btn-outline" onclick="disconnectBexio()" style="display: none;">Verbindung trennen</button>
           </div>
 
-          <!-- Erloeskonto Preference (only shown when Bexio is connected) -->
+          <!-- Erlöskonto Preference (only shown when Bexio is connected) -->
           <div id="bexio-account-block" style="display: none; margin-top: 20px; padding-top: 16px; border-top: 1px solid #eee;">
-            <div class="dash-info">Erloeskonto</div>
+            <div class="dash-info">Erlöskonto</div>
             <div class="dash-value" id="bexio-account-current" style="font-size: 14px;">Automatisch</div>
             <p style="color: var(--gray); font-size: 13px; margin-top: 4px; line-height: 1.5;">
               Standard ist automatische Erkennung (bevorzugt 3400 Dienstleistungsertrag, dann 3200, 3000).
-              Waehle dein Konto, falls du einen anderen Ertrag buchen willst.
+              Wähle dein Konto, falls du einen anderen Ertrag buchen willst.
             </p>
             <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
               <select id="bexio-account-select" style="flex: 1; min-width: 200px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-                <option value="">Laedt...</option>
+                <option value="">Lädt...</option>
               </select>
               <button class="btn btn-primary" style="font-size: 13px; padding: 6px 12px;" onclick="saveRevenueAccountPreference()">Speichern</button>
             </div>
@@ -99,11 +99,11 @@
             <a id="bot-whatsapp-link" href="#" target="_blank" rel="noopener"
                class="btn btn-primary"
                style="display: inline-block; text-decoration: none;">
-              Auf WhatsApp oeffnen
+              Auf WhatsApp öffnen
             </a>
           </div>
           <p style="color: var(--gray); font-size: 14px; margin-top: 8px;">
-            Schreibe <strong>hilfe</strong> fuer eine Uebersicht der Befehle.
+            Schreibe <strong>hilfe</strong> für eine Übersicht der Befehle.
           </p>
         </div>
 
@@ -114,7 +114,7 @@
             <p><strong>1.</strong> Verbinde dein Bexio-Konto</p>
             <p><strong>2.</strong> Speichere die Bot-Nummer in deinen Kontakten</p>
             <p><strong>3.</strong> Schreibe <strong>rechnung</strong> um deine erste Rechnung zu erstellen</p>
-            <p><strong>4.</strong> Mit <strong>Entwurf bearbeiten</strong> kannst du spaeter weitere Positionen ergaenzen</p>
+            <p><strong>4.</strong> Mit <strong>Entwurf bearbeiten</strong> kannst du später weitere Positionen ergänzen</p>
           </div>
         </div>
 
