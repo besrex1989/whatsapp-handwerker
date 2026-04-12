@@ -41,6 +41,9 @@
           <div class="dash-value" id="trial-end">—</div>
           <div class="dash-info">WhatsApp Nummer</div>
           <div class="dash-value" id="whatsapp-nr">—</div>
+          <div style="margin-top: 8px;">
+            <button class="btn btn-outline" style="font-size: 13px; padding: 6px 12px;" onclick="changeWhatsappNumber()">Nummer aendern</button>
+          </div>
         </div>
 
         <!-- Bexio Verbindung -->
@@ -48,8 +51,9 @@
           <h3>Bexio Verbindung</h3>
           <div class="dash-info">Status</div>
           <div class="dash-value"><span id="bexio-status" class="status-badge inactive">Nicht verbunden</span></div>
-          <div style="margin-top: 16px;">
+          <div style="margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap;">
             <button id="bexio-connect-btn" class="btn btn-primary" onclick="connectBexio()">Mit Bexio verbinden</button>
+            <button id="bexio-disconnect-btn" class="btn btn-outline" onclick="disconnectBexio()" style="display: none;">Verbindung trennen</button>
           </div>
         </div>
 

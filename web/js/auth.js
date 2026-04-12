@@ -4,6 +4,37 @@ var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// The WhatsApp business number the bot runs on (Meta test number for now).
+// TODO: move into env/config once a permanent System User token with a
+// dedicated company number is provisioned.
+var BOT_WHATSAPP_NUMBER = "+1 555 173 7232";
+
+// ===== Phone helpers =====
+
+// Normalise a user-entered phone number to E.164 (+41...).
+// Accepts '0763449800', '076 344 98 00', '+41763449800', '0041...', '41...'.
+// Returns { ok: true, phone: "+41763449800" } or { ok: false, error: "..." }.
+function normalizePhoneCH(input) {
+  if (!input) return { ok: false, error: "Bitte eine Telefonnummer eingeben." };
+  var p = String(input).replace(/[\s\-()]+/g, "");
+  if (p.startsWith("00")) {
+    p = "+" + p.slice(2);
+  } else if (p.startsWith("+")) {
+    // already international
+  } else if (p.startsWith("0")) {
+    p = "+41" + p.slice(1);
+  } else {
+    p = "+" + p;
+  }
+  if (!/^\+\d{8,15}$/.test(p)) {
+    return {
+      ok: false,
+      error: "Ungueltige Telefonnummer. Bitte im Format 076 344 98 00 oder +41 76 344 98 00 eingeben.",
+    };
+  }
+  return { ok: true, phone: p };
+}
+
 // ===== Auth State Check =====
 async function checkAuth() {
   var session = await supabase.auth.getSession();
@@ -89,31 +120,13 @@ async function handleRegister(e) {
   var phone = document.getElementById("reg-phone").value;
   var password = document.getElementById("reg-password").value;
 
-  // Normalize phone number to E.164 format (+41...).
-  // - Strip spaces, dashes, parentheses
-  // - "0763449800"       -> "+41763449800"  (CH national -> international)
-  // - "41763449800"      -> "+41763449800"
-  // - "+41 76 344 98 00" -> "+41763449800"
-  // - "0041763449800"    -> "+41763449800"
-  phone = phone.replace(/[\s\-()]+/g, "");
-  if (phone.startsWith("00")) {
-    phone = "+" + phone.slice(2);
-  } else if (phone.startsWith("+")) {
-    // already international; leave as is
-  } else if (phone.startsWith("0")) {
-    // Swiss national format: drop leading 0, prepend +41
-    phone = "+41" + phone.slice(1);
-  } else {
-    // Assume already includes country code without the plus
-    phone = "+" + phone;
-  }
-
-  // Basic sanity check — must be "+" followed by 8-15 digits
-  if (!/^\+\d{8,15}$/.test(phone)) {
-    errorEl.textContent = "Ungueltige Telefonnummer. Bitte im Format 076 344 98 00 oder +41 76 344 98 00 eingeben.";
+  var result = normalizePhoneCH(phone);
+  if (!result.ok) {
+    errorEl.textContent = result.error;
     errorEl.style.display = "block";
     return;
   }
+  phone = result.phone;
 
   btn.textContent = "Wird erstellt...";
   btn.disabled = true;

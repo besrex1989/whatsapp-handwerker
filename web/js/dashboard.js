@@ -61,6 +61,7 @@ async function loadDashboard() {
   // Bexio status
   var bexioStatus = document.getElementById("bexio-status");
   var bexioBtn = document.getElementById("bexio-connect-btn");
+  var bexioDisconnectBtn = document.getElementById("bexio-disconnect-btn");
   if (bexioStatus) {
     if (tenant.bexio_access_token) {
       bexioStatus.textContent = "Verbunden";
@@ -69,11 +70,95 @@ async function loadDashboard() {
         bexioBtn.textContent = "Neu verbinden";
         bexioBtn.className = "btn btn-outline";
       }
+      if (bexioDisconnectBtn) bexioDisconnectBtn.style.display = "";
     } else {
       bexioStatus.textContent = "Nicht verbunden";
       bexioStatus.className = "status-badge inactive";
+      if (bexioBtn) {
+        bexioBtn.textContent = "Mit Bexio verbinden";
+        bexioBtn.className = "btn btn-primary";
+      }
+      if (bexioDisconnectBtn) bexioDisconnectBtn.style.display = "none";
     }
   }
+
+  // Bot number
+  var botNrEl = document.getElementById("bot-number");
+  if (botNrEl && typeof BOT_WHATSAPP_NUMBER !== "undefined") {
+    botNrEl.textContent = BOT_WHATSAPP_NUMBER;
+  }
+}
+
+// Change WhatsApp number
+async function changeWhatsappNumber() {
+  var user = await checkAuth();
+  if (!user) { alert("Nicht angemeldet."); return; }
+
+  var currentEl = document.getElementById("whatsapp-nr");
+  var current = currentEl ? currentEl.textContent : "";
+  var input = prompt(
+    "Neue WhatsApp-Nummer eingeben\n(Format: 076 344 98 00 oder +41 76 344 98 00):",
+    current && current !== "—" ? current : ""
+  );
+  if (input === null) return; // cancelled
+
+  var norm = normalizePhoneCH(input);
+  if (!norm.ok) {
+    alert(norm.error);
+    return;
+  }
+
+  var updateResult = await supabase
+    .from("tenants")
+    .update({ whatsapp_number: norm.phone, updated_at: new Date().toISOString() })
+    .eq("email", user.email);
+
+  if (updateResult.error) {
+    // Most likely cause: another tenant already owns that number (unique constraint)
+    if (String(updateResult.error.message || "").toLowerCase().indexOf("duplicate") >= 0
+        || updateResult.error.code === "23505") {
+      alert("Diese Nummer ist bereits bei einem anderen Konto registriert.");
+    } else {
+      alert("Fehler beim Speichern: " + updateResult.error.message);
+    }
+    return;
+  }
+
+  alert("Nummer aktualisiert: " + norm.phone);
+  loadDashboard();
+}
+
+// Disconnect Bexio
+async function disconnectBexio() {
+  var user = await checkAuth();
+  if (!user) { alert("Nicht angemeldet."); return; }
+
+  if (!confirm("Bexio-Verbindung wirklich trennen? Der Bot kann dann bis zur erneuten Verbindung keine Rechnungen mehr erstellen.")) {
+    return;
+  }
+
+  var btn = document.getElementById("bexio-disconnect-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Trenne..."; }
+
+  var updateResult = await supabase
+    .from("tenants")
+    .update({
+      bexio_access_token: null,
+      bexio_refresh_token: null,
+      bexio_expires_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("email", user.email);
+
+  if (btn) { btn.disabled = false; btn.textContent = "Verbindung trennen"; }
+
+  if (updateResult.error) {
+    alert("Fehler: " + updateResult.error.message);
+    return;
+  }
+
+  alert("Bexio-Verbindung getrennt.");
+  loadDashboard();
 }
 
 // Connect Bexio
