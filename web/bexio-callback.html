@@ -60,7 +60,13 @@
         document.querySelector(".spinner").style.display = "none";
         if (resp.ok) {
           document.getElementById("status").textContent = "Bexio erfolgreich verbunden!";
-          document.getElementById("detail").textContent = "Du kannst dieses Fenster jetzt schliessen und WhatsApp verwenden.";
+          document.getElementById("detail").textContent = "Du wirst in Kuerze zum Dashboard weitergeleitet...";
+          // Auto-redirect back to the dashboard. The tenant row was just
+          // updated by bexio-oauth (access_token + refresh_token), so the
+          // dashboard will render the "Verbunden" badge on next load.
+          setTimeout(function () {
+            window.location.href = "/dashboard.html";
+          }, 1500);
         } else {
           var errText = await resp.text();
           document.getElementById("status").textContent = "Fehler bei der Verbindung";
