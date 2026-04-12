@@ -99,36 +99,65 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // --- Tenant finden ---
-    if (session && !session.tenant_id) {
-      // Try multiple phone formats: +41xxx, whatsapp:+41xxx, 41xxx
-      var phoneClean = phone.replace("+", "");
-      var { data: tenant } = await supabase
-        .from("tenants")
-        .select("*")
-        .or("whatsapp_number.eq." + phone + ",whatsapp_number.eq.whatsapp:" + phone + ",whatsapp_number.eq." + phoneClean)
-        .single();
+    // --- Tenant finden + Abo-/Trial-Gate ---
+    // Wichtig: der Gate-Check muss auf JEDER eingehenden Nachricht laufen,
+    // nicht nur beim ersten Hello einer Session. Sonst könnte ein User,
+    // dessen Trial/Abo während einer laufenden Session abläuft, bis zu
+    // 8h weiter Rechnungen erstellen, bevor die Sperre greift.
+    if (session) {
+      var tenant: any = null;
 
-      if (!tenant) {
-        await sendText(from, "Willkommen! Deine Nummer ist noch nicht registriert.\nBitte melde dich zuerst auf unserer Website an.");
-        return new Response("OK", { status: 200 });
+      if (session.tenant_id) {
+        var tenantResp = await supabase
+          .from("tenants")
+          .select("*")
+          .eq("id", session.tenant_id)
+          .single();
+        tenant = tenantResp.data;
+      } else {
+        // Try multiple phone formats: +41xxx, whatsapp:+41xxx, 41xxx
+        var phoneClean = phone.replace("+", "");
+        var lookup = await supabase
+          .from("tenants")
+          .select("*")
+          .or("whatsapp_number.eq." + phone + ",whatsapp_number.eq.whatsapp:" + phone + ",whatsapp_number.eq." + phoneClean)
+          .single();
+        tenant = lookup.data;
+
+        if (!tenant) {
+          await sendText(from, "Willkommen! Deine Nummer ist noch nicht registriert.\nBitte melde dich zuerst auf unserer Website an.");
+          return new Response("OK", { status: 200 });
+        }
+
+        await supabase.from("sessions_handwerker").update({ tenant_id: tenant.id }).eq("id", session.id);
+        session.tenant_id = tenant.id;
       }
 
-      if (!tenant.is_active && tenant.plan !== "trial") {
-        await sendText(from, "Dein Konto ist nicht aktiv. Bitte erneuere dein Abo.");
-        return new Response("OK", { status: 200 });
-      }
+      // Gate: aktives Abo oder laufender Trial?
+      if (tenant) {
+        var planRaw = tenant.plan || "trial";
+        var isActive = planRaw === "active"
+          || planRaw === "active_monthly"
+          || planRaw === "active_yearly";
 
-      if (tenant.plan === "trial") {
-        var trialEnd = new Date(tenant.trial_ends_at).getTime();
-        if (trialEnd < Date.now()) {
-          await sendText(from, "Deine Testphase ist abgelaufen. Bitte upgrade auf ein Abo.");
+        if (planRaw === "trial") {
+          var trialEnd = tenant.trial_ends_at
+            ? new Date(tenant.trial_ends_at).getTime()
+            : 0;
+          if (trialEnd < Date.now()) {
+            await sendText(from,
+              "Deine Testphase ist abgelaufen.\n" +
+              "Bitte upgrade auf ein Abo unter https://www.whatsbill.ch/dashboard.html");
+            return new Response("OK", { status: 200 });
+          }
+        } else if (!isActive) {
+          // past_due, cancelled, pending, oder manuell deaktiviert
+          await sendText(from,
+            "Dein Konto ist nicht aktiv (" + planRaw + ").\n" +
+            "Bitte pruefe dein Abo unter https://www.whatsbill.ch/dashboard.html");
           return new Response("OK", { status: 200 });
         }
       }
-
-      await supabase.from("sessions_handwerker").update({ tenant_id: tenant.id }).eq("id", session.id);
-      session.tenant_id = tenant.id;
     }
 
     if (!session) return new Response("OK", { status: 200 });
