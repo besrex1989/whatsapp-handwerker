@@ -4,7 +4,19 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 // Bexio migrated from idp.bexio.com to auth.bexio.com (Keycloak)
 const BEXIO_TOKEN_URL = "https://auth.bexio.com/realms/bexio/protocol/openid-connect/token";
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Max-Age": "86400",
+};
+
 serve(async (req) => {
+  // CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { status: 200, headers: CORS_HEADERS });
+  }
+
   const url = new URL(req.url);
 
   // Handle OAuth callback: GET /bexio-oauth?code=xxx&state=tenant_id&redirect_uri=xxx
@@ -15,7 +27,10 @@ serve(async (req) => {
       || Deno.env.get("SUPABASE_URL") + "/functions/v1/bexio-oauth";
 
     if (!code || !state) {
-      return new Response("Fehlende Parameter (code oder state).", { status: 400 });
+      return new Response("Fehlende Parameter (code oder state).", {
+        status: 400,
+        headers: CORS_HEADERS,
+      });
     }
 
     try {
@@ -35,7 +50,10 @@ serve(async (req) => {
       if (!tokenResp.ok) {
         const err = await tokenResp.text();
         console.error("[Bexio OAuth] Token error:", err);
-        return new Response("Fehler bei der Bexio-Verbindung.", { status: 500 });
+        return new Response("Fehler bei der Bexio-Verbindung: " + err, {
+          status: 500,
+          headers: CORS_HEADERS,
+        });
       }
 
       const tokens = await tokenResp.json();
@@ -60,28 +78,38 @@ serve(async (req) => {
         JSON.stringify({ success: true, message: "Bexio erfolgreich verbunden!" }),
         {
           status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
         },
       );
     } catch (err) {
       console.error("[Bexio OAuth] Error:", err);
-      return new Response("Interner Fehler bei der Bexio-Verbindung.", { status: 500 });
+      return new Response("Interner Fehler bei der Bexio-Verbindung.", {
+        status: 500,
+        headers: CORS_HEADERS,
+      });
     }
   }
 
-  // Generate authorization URL: POST /bexio-oauth { tenant_id: "..." }
+  // Generate authorization URL: POST /bexio-oauth { tenant_id, redirect_uri? }
   if (req.method === "POST") {
-    const { tenant_id } = await req.json();
+    let body: any = {};
+    try { body = await req.json(); } catch { /* empty body */ }
+    const { tenant_id, redirect_uri } = body;
     if (!tenant_id) {
-      return new Response(JSON.stringify({ error: "tenant_id required" }), { status: 400 });
+      return new Response(JSON.stringify({ error: "tenant_id required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+      });
     }
+
+    // Prefer the caller-supplied redirect_uri (e.g. the Vercel callback page
+    // that Bexio has registered). Fall back to the Edge Function URL.
+    const effectiveRedirect = redirect_uri
+      || `${Deno.env.get("SUPABASE_URL")}/functions/v1/bexio-oauth`;
 
     const params = new URLSearchParams({
       client_id: Deno.env.get("BEXIO_CLIENT_ID")!,
-      redirect_uri: `${Deno.env.get("SUPABASE_URL")}/functions/v1/bexio-oauth`,
+      redirect_uri: effectiveRedirect,
       response_type: "code",
       scope: "openid profile offline_access contact_show contact_edit kb_invoice_edit article_show",
       state: tenant_id,
@@ -91,9 +119,12 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({ url: authUrl }), {
       status: 200,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
     });
   }
 
-  return new Response("Method not allowed", { status: 405 });
+  return new Response("Method not allowed", {
+    status: 405,
+    headers: CORS_HEADERS,
+  });
 });

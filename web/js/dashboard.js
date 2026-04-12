@@ -78,36 +78,78 @@ async function loadDashboard() {
 
 // Connect Bexio
 async function connectBexio() {
-  var user = await checkAuth();
-  if (!user) return;
+  var btn = document.getElementById("bexio-connect-btn");
+  var originalLabel = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = "Verbinde..."; }
 
-  // Get tenant ID
-  var result = await supabase
-    .from("tenants")
-    .select("id")
-    .eq("email", user.email)
-    .single();
+  try {
+    var user = await checkAuth();
+    if (!user) { alert("Nicht angemeldet."); return; }
 
-  if (!result.data) {
-    alert("Tenant nicht gefunden.");
-    return;
-  }
+    // Get tenant ID
+    var result = await supabase
+      .from("tenants")
+      .select("id")
+      .eq("email", user.email)
+      .single();
 
-  // Call Bexio OAuth Edge Function to get auth URL
-  var resp = await fetch(
-    SUPABASE_URL + "/functions/v1/bexio-oauth",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tenant_id: result.data.id }),
+    if (result.error) {
+      alert("Tenant-Abfrage fehlgeschlagen: " + result.error.message);
+      return;
     }
-  );
+    if (!result.data) {
+      alert("Tenant nicht gefunden.");
+      return;
+    }
 
-  if (resp.ok) {
+    // Current user's access token (sent to Edge Function as Bearer)
+    var sessionResult = await supabase.auth.getSession();
+    var accessToken = sessionResult.data.session
+      ? sessionResult.data.session.access_token
+      : SUPABASE_ANON_KEY;
+
+    // The Vercel-hosted callback page that Bexio has registered as redirect URI
+    var callbackUrl = window.location.origin + "/bexio-callback.html";
+
+    // Call Bexio OAuth Edge Function to get auth URL
+    var resp;
+    try {
+      resp = await fetch(
+        SUPABASE_URL + "/functions/v1/bexio-oauth",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": "Bearer " + accessToken,
+          },
+          body: JSON.stringify({
+            tenant_id: result.data.id,
+            redirect_uri: callbackUrl,
+          }),
+        }
+      );
+    } catch (netErr) {
+      console.error("[connectBexio] network error:", netErr);
+      alert("Netzwerkfehler: " + netErr.message);
+      return;
+    }
+
+    if (!resp.ok) {
+      var errBody = await resp.text();
+      console.error("[connectBexio] response not ok", resp.status, errBody);
+      alert("Fehler beim Verbinden mit Bexio (" + resp.status + "): " + errBody);
+      return;
+    }
+
     var data = await resp.json();
+    if (!data.url) {
+      alert("Keine Auth-URL erhalten.");
+      return;
+    }
     window.location.href = data.url;
-  } else {
-    alert("Fehler beim Verbinden mit Bexio.");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
   }
 }
 
