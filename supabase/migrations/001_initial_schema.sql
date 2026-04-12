@@ -19,6 +19,7 @@ create table if not exists public.tenants (
 );
 
 alter table public.tenants enable row level security;
+drop policy if exists "Service role full access tenants" on public.tenants;
 create policy "Service role full access tenants" on public.tenants for all to service_role using (true);
 
 create table if not exists public.sessions_handwerker (
@@ -45,6 +46,7 @@ create table if not exists public.sessions_handwerker (
 );
 
 alter table public.sessions_handwerker enable row level security;
+drop policy if exists "Service role full access sessions_handwerker" on public.sessions_handwerker;
 create policy "Service role full access sessions_handwerker" on public.sessions_handwerker for all to service_role using (true);
 
 create index if not exists idx_tenants_whatsapp on public.tenants(whatsapp_number);
