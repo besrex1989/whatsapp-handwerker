@@ -117,7 +117,7 @@ serve(async (req) => {
       client_id: Deno.env.get("BEXIO_CLIENT_ID")!,
       redirect_uri: effectiveRedirect,
       response_type: "code",
-      scope: "openid profile offline_access contact_show contact_edit kb_invoice_edit article_show accounting",
+      scope: "openid profile offline_access contact_show contact_edit kb_invoice_edit kb_offer_edit article_show accounting",
       state: tenant_id,
     });
 
