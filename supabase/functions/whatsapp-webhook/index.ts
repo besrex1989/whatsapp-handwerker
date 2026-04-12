@@ -1429,12 +1429,15 @@ async function bexioListDrafts(tenant: any, docType: DocType): Promise<any[]> {
   var endpoint = docEndpoint(docType);
   var label = docLabel(docType);
   console.log("[Bexio] Listing draft " + label + "s...");
-  // kb_item_status_id = 7 = Draft (Entwurf) in Bexio — same for kb_invoice
-  // and kb_offer.
+  // Draft status ID differs between endpoints:
+  //   kb_invoice: 7 = Entwurf
+  //   kb_offer:   1 = Entwurf
+  // (Bexio documents both status enums separately; they do NOT overlap.)
+  var draftStatusId = docType === "offer" ? 1 : 7;
   var resp = await fetch("https://api.bexio.com/2.0/" + endpoint + "/search?limit=50&order_by=id_desc", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify([{ field: "kb_item_status_id", value: 7, criteria: "=" }]),
+    body: JSON.stringify([{ field: "kb_item_status_id", value: draftStatusId, criteria: "=" }]),
   });
   if (!resp.ok) {
     var errText = await resp.text();
