@@ -32,18 +32,26 @@ async function loadDashboard() {
 
   // Plan
   var planBadge = document.getElementById("plan-badge");
+  var planRaw = tenant.plan || "trial";
+  // "active_monthly" / "active_yearly" from stripe-webhook both count as active
+  var isActive = planRaw === "active" || planRaw.indexOf("active_") === 0;
   if (planBadge) {
-    var plan = tenant.plan || "trial";
-    planBadge.textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
+    var label = planRaw === "active_monthly" ? "Monatlich"
+      : planRaw === "active_yearly" ? "Jaehrlich"
+      : planRaw.charAt(0).toUpperCase() + planRaw.slice(1);
+    planBadge.textContent = label;
     planBadge.className = "status-badge";
-    if (plan === "trial") {
+    if (planRaw === "trial") {
       planBadge.classList.add("trial");
-    } else if (plan === "active") {
+    } else if (isActive) {
       planBadge.classList.add("active");
     } else {
       planBadge.classList.add("inactive");
     }
   }
+
+  // Abo-Karte füllen
+  renderSubscriptionCard(tenant, planRaw, isActive);
 
   // Trial end
   var trialEndEl = document.getElementById("trial-end");
@@ -245,6 +253,189 @@ async function connectBexio() {
     window.location.href = data.url;
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
+  }
+}
+
+// ===== Abo / Subscription =====
+
+// Build the content of the "Abo" card on the dashboard. Called by
+// loadDashboard() once we have the tenant row.
+function renderSubscriptionCard(tenant, planRaw, isActive) {
+  var infoEl = document.getElementById("subscription-info");
+  var actionsEl = document.getElementById("subscription-actions");
+  if (!infoEl || !actionsEl) return;
+
+  actionsEl.innerHTML = "";
+
+  if (isActive) {
+    var planLabel = planRaw === "active_yearly" ? "Jaehrlich (228 CHF / Jahr)"
+      : planRaw === "active_monthly" ? "Monatlich (19 CHF / Monat)"
+      : "Aktiv";
+    infoEl.innerHTML = "<strong>Dein Abo ist aktiv.</strong><br>Plan: " + planLabel;
+
+    var manageBtn = document.createElement("button");
+    manageBtn.className = "btn btn-outline";
+    manageBtn.textContent = "Abo verwalten";
+    manageBtn.onclick = function () { openBillingPortal(); };
+    actionsEl.appendChild(manageBtn);
+    return;
+  }
+
+  // Trial or expired — show upgrade options
+  if (planRaw === "trial" && tenant.trial_ends_at) {
+    var daysLeft = Math.ceil(
+      (new Date(tenant.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+    );
+    if (daysLeft > 0) {
+      infoEl.innerHTML = "Deine Testphase laeuft noch <strong>" + daysLeft + " Tag" +
+        (daysLeft === 1 ? "" : "e") + "</strong>. Upgrade jederzeit moeglich.";
+    } else {
+      infoEl.innerHTML = "<strong style=\"color:#d93025\">Deine Testphase ist abgelaufen.</strong><br>" +
+        "Bitte upgrade, um den Bot weiter zu nutzen.";
+    }
+  } else if (planRaw === "past_due") {
+    infoEl.innerHTML = "<strong style=\"color:#d93025\">Deine letzte Zahlung ist fehlgeschlagen.</strong><br>" +
+      "Bitte aktualisiere deine Zahlungsmethode.";
+  } else if (planRaw === "cancelled") {
+    infoEl.innerHTML = "<strong>Dein Abo wurde gekuendigt.</strong><br>" +
+      "Du kannst jederzeit ein neues abschliessen.";
+  } else {
+    infoEl.innerHTML = "Kein aktives Abo.";
+  }
+
+  var monthlyBtn = document.createElement("button");
+  monthlyBtn.className = "btn btn-primary";
+  monthlyBtn.textContent = "Monatlich (19 CHF)";
+  monthlyBtn.onclick = function () { upgradeSubscription("monthly"); };
+  actionsEl.appendChild(monthlyBtn);
+
+  var yearlyBtn = document.createElement("button");
+  yearlyBtn.className = "btn btn-outline";
+  yearlyBtn.textContent = "Jaehrlich (228 CHF)";
+  yearlyBtn.onclick = function () { upgradeSubscription("yearly"); };
+  actionsEl.appendChild(yearlyBtn);
+}
+
+// Start a Stripe Checkout flow for the chosen plan.
+async function upgradeSubscription(plan) {
+  var user = await checkAuth();
+  if (!user) { alert("Nicht angemeldet."); return; }
+
+  var actionsEl = document.getElementById("subscription-actions");
+  if (actionsEl) {
+    var buttons = actionsEl.querySelectorAll("button");
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].disabled = true;
+    }
+  }
+
+  try {
+    var tenantResult = await supabase
+      .from("tenants").select("id").eq("email", user.email).single();
+    if (tenantResult.error || !tenantResult.data) {
+      alert("Tenant nicht gefunden.");
+      return;
+    }
+
+    var sessionResult = await supabase.auth.getSession();
+    var accessToken = sessionResult.data.session
+      ? sessionResult.data.session.access_token
+      : SUPABASE_ANON_KEY;
+
+    var origin = window.location.origin;
+    var resp = await fetch(
+      SUPABASE_URL + "/functions/v1/stripe-checkout",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": "Bearer " + accessToken,
+        },
+        body: JSON.stringify({
+          tenant_id: tenantResult.data.id,
+          plan: plan,
+          success_url: origin + "/subscription-success.html",
+          cancel_url: origin + "/dashboard.html",
+        }),
+      },
+    );
+
+    if (!resp.ok) {
+      var errTxt = await resp.text();
+      console.error("[upgradeSubscription] not ok:", resp.status, errTxt);
+      alert("Fehler beim Upgrade (" + resp.status + "): " + errTxt);
+      return;
+    }
+
+    var data = await resp.json();
+    if (!data.url) {
+      alert("Keine Checkout-URL erhalten.");
+      return;
+    }
+    window.location.href = data.url;
+  } catch (err) {
+    console.error("[upgradeSubscription] exception:", err);
+    alert("Netzwerkfehler: " + err.message);
+  } finally {
+    if (actionsEl) {
+      var buttons2 = actionsEl.querySelectorAll("button");
+      for (var j = 0; j < buttons2.length; j++) {
+        buttons2[j].disabled = false;
+      }
+    }
+  }
+}
+
+// Open the Stripe Customer Portal so the user can manage an active sub.
+async function openBillingPortal() {
+  var user = await checkAuth();
+  if (!user) { alert("Nicht angemeldet."); return; }
+
+  try {
+    var tenantResult = await supabase
+      .from("tenants").select("id").eq("email", user.email).single();
+    if (tenantResult.error || !tenantResult.data) {
+      alert("Tenant nicht gefunden.");
+      return;
+    }
+
+    var sessionResult = await supabase.auth.getSession();
+    var accessToken = sessionResult.data.session
+      ? sessionResult.data.session.access_token
+      : SUPABASE_ANON_KEY;
+
+    var resp = await fetch(
+      SUPABASE_URL + "/functions/v1/stripe-portal",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": "Bearer " + accessToken,
+        },
+        body: JSON.stringify({
+          tenant_id: tenantResult.data.id,
+          return_url: window.location.origin + "/dashboard.html",
+        }),
+      },
+    );
+
+    if (!resp.ok) {
+      var errTxt = await resp.text();
+      alert("Fehler (" + resp.status + "): " + errTxt);
+      return;
+    }
+
+    var data = await resp.json();
+    if (!data.url) {
+      alert("Keine Portal-URL erhalten.");
+      return;
+    }
+    window.location.href = data.url;
+  } catch (err) {
+    console.error("[openBillingPortal] exception:", err);
+    alert("Netzwerkfehler: " + err.message);
   }
 }
 
