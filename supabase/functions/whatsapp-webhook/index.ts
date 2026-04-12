@@ -402,9 +402,9 @@ Deno.serve(async (req: Request) => {
               "Die Rechnung findest du in deinem Bexio-Konto."
             );
             try { await sendEmailNotification(tenant.email, invoice.document_nr, invoice.total); } catch (_e) { /* ok */ }
-          } catch (_e) {
-            console.error("Invoice error:", _e);
-            await sendText(from, "Fehler beim Erstellen der Rechnung. Bitte pruefe deine Bexio-Verbindung.");
+          } catch (invErr) {
+            console.error("Invoice error:", invErr);
+            await sendText(from, "Fehler beim Erstellen der Rechnung:\n\n" + String(invErr).slice(0, 300) + "\n\nBitte pruefe deine Bexio-Verbindung.");
           }
           await resetSession(session.id);
         }
@@ -623,22 +623,98 @@ async function bexioCreateContact(tenant: any, c: { name: string; address: strin
 
 async function bexioCreateInvoice(tenant: any, params: { contactId: number; title: string; positions: any[] }): Promise<any> {
   var token = await getBexioToken(tenant);
+
+  // Auto-fetch missing Bexio config (user_id, account_id, tax_id)
+  var userId = tenant.bexio_user_id;
+  var accountId = tenant.bexio_account_id;
+  var taxId = tenant.bexio_tax_id;
+  var needsUpdate = false;
+
+  if (!userId) {
+    console.log("[Bexio] Fetching user_id...");
+    var userResp = await fetch("https://api.bexio.com/3.0/users/me", {
+      headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+    });
+    if (userResp.ok) {
+      var userData = await userResp.json();
+      userId = userData.id;
+      needsUpdate = true;
+      console.log("[Bexio] Got user_id:", userId);
+    }
+  }
+
+  if (!accountId) {
+    console.log("[Bexio] Fetching accounts...");
+    var accResp = await fetch("https://api.bexio.com/2.0/accounts", {
+      headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+    });
+    if (accResp.ok) {
+      var accounts = await accResp.json();
+      // Find a revenue account (Ertragskonto) - typically starts with "3" in Swiss accounting
+      var revenueAccount = Array.isArray(accounts)
+        ? accounts.find(function (a: any) { return a.account_no && String(a.account_no).startsWith("3"); })
+        : null;
+      if (revenueAccount) {
+        accountId = revenueAccount.id;
+        needsUpdate = true;
+        console.log("[Bexio] Got account_id:", accountId);
+      }
+    }
+  }
+
+  if (!taxId) {
+    console.log("[Bexio] Fetching taxes...");
+    var taxResp = await fetch("https://api.bexio.com/3.0/taxes", {
+      headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+    });
+    if (taxResp.ok) {
+      var taxes = await taxResp.json();
+      // Find standard sales tax (8.1% or highest active sales tax)
+      var salesTax = Array.isArray(taxes)
+        ? taxes.find(function (t: any) { return t.type === "sales_tax" && t.is_active; })
+        : null;
+      if (salesTax) {
+        taxId = salesTax.id;
+        needsUpdate = true;
+        console.log("[Bexio] Got tax_id:", taxId);
+      }
+    }
+  }
+
+  // Save fetched IDs to tenant
+  if (needsUpdate) {
+    await supabase.from("tenants").update({
+      bexio_user_id: userId, bexio_account_id: accountId, bexio_tax_id: taxId,
+    }).eq("id", tenant.id);
+  }
+
+  if (!userId || !accountId) {
+    throw new Error("Bexio-Konfiguration unvollstaendig (user_id=" + userId + ", account_id=" + accountId + ", tax_id=" + taxId + ")");
+  }
+
   var today = new Date().toISOString().split("T")[0];
   var dueDate = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
   var positionItems = params.positions.map(function (p: any) {
-    return {
+    var pos: any = {
       type: "KbPositionCustom", text: p.description, unit_price: p.price.toFixed(2),
-      amount: "1", account_id: tenant.bexio_account_id, tax_id: tenant.bexio_tax_id,
+      amount: "1", account_id: accountId,
     };
+    if (taxId) pos.tax_id = taxId;
+    return pos;
   });
   var resp = await fetch("https://api.bexio.com/2.0/kb_invoice", {
     method: "POST",
-    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
-      title: params.title, contact_id: params.contactId, user_id: tenant.bexio_user_id,
+      title: params.title, contact_id: params.contactId, user_id: userId,
       is_valid_from: today, is_valid_to: dueDate, mwst_type: 0, mwst_is_net: true, positions: positionItems,
     }),
   });
+  if (!resp.ok) {
+    var errText = await resp.text();
+    console.error("[Bexio] Invoice create error:", resp.status, errText);
+    throw new Error("Bexio Rechnung (" + resp.status + "): " + errText.slice(0, 300));
+  }
   return resp.json();
 }
 
