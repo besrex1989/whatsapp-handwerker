@@ -721,11 +721,13 @@ Deno.serve(async (req: Request) => {
           current_position_amount: null, current_position_unit: null,
           step: "position_more", updated_at: new Date().toISOString(),
         }).eq("id", session.id);
+        var posMoreDocType: DocType = (session.bexio_document_type === "offer") ? "offer" : "invoice";
+        var posMoreDocLabel = docLabel(posMoreDocType);
         await sendButtons(from,
           "Position hinzugefügt!\n\nPositionen: " + positions.length + "\nTotal: CHF " + total.toFixed(2),
           [
             { id: "add_more", title: "Weitere Position" },
-            { id: "finish", title: "Rechnung erstellen" },
+            { id: "finish", title: posMoreDocLabel + " erstellen" },
           ]
         );
       }
