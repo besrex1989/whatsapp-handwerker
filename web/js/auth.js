@@ -131,7 +131,9 @@ async function handleRegister(e) {
   btn.textContent = "Wird erstellt...";
   btn.disabled = true;
 
-  // 1. Create auth user
+  // Create auth user — a database trigger on auth.users automatically creates
+  // the matching public.tenants row using full_name / whatsapp_number from
+  // raw_user_meta_data. See migration 006_auto_create_tenant_on_signup.sql.
   var result = await supabase.auth.signUp({
     email: email,
     password: password,
@@ -145,24 +147,6 @@ async function handleRegister(e) {
 
   if (result.error) {
     errorEl.textContent = "Fehler: " + result.error.message;
-    errorEl.style.display = "block";
-    btn.textContent = "Kostenlos registrieren";
-    btn.disabled = false;
-    return;
-  }
-
-  // 2. Create tenant record
-  var tenantResult = await supabase.from("tenants").insert({
-    email: email,
-    full_name: name,
-    whatsapp_number: phone,
-  });
-
-  if (tenantResult.error) {
-    console.error("Tenant insert error:", tenantResult.error);
-    errorEl.textContent = "Konto erstellt, aber Tenant konnte nicht angelegt werden: "
-      + tenantResult.error.message
-      + ". Bitte Support kontaktieren.";
     errorEl.style.display = "block";
     btn.textContent = "Kostenlos registrieren";
     btn.disabled = false;
