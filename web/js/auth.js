@@ -89,10 +89,30 @@ async function handleRegister(e) {
   var phone = document.getElementById("reg-phone").value;
   var password = document.getElementById("reg-password").value;
 
-  // Normalize phone number
-  phone = phone.replace(/\s+/g, "");
-  if (!phone.startsWith("+")) {
+  // Normalize phone number to E.164 format (+41...).
+  // - Strip spaces, dashes, parentheses
+  // - "0763449800"       -> "+41763449800"  (CH national -> international)
+  // - "41763449800"      -> "+41763449800"
+  // - "+41 76 344 98 00" -> "+41763449800"
+  // - "0041763449800"    -> "+41763449800"
+  phone = phone.replace(/[\s\-()]+/g, "");
+  if (phone.startsWith("00")) {
+    phone = "+" + phone.slice(2);
+  } else if (phone.startsWith("+")) {
+    // already international; leave as is
+  } else if (phone.startsWith("0")) {
+    // Swiss national format: drop leading 0, prepend +41
+    phone = "+41" + phone.slice(1);
+  } else {
+    // Assume already includes country code without the plus
     phone = "+" + phone;
+  }
+
+  // Basic sanity check — must be "+" followed by 8-15 digits
+  if (!/^\+\d{8,15}$/.test(phone)) {
+    errorEl.textContent = "Ungueltige Telefonnummer. Bitte im Format 076 344 98 00 oder +41 76 344 98 00 eingeben.";
+    errorEl.style.display = "block";
+    return;
   }
 
   btn.textContent = "Wird erstellt...";
