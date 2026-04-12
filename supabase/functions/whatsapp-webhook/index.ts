@@ -172,10 +172,11 @@ Deno.serve(async (req: Request) => {
         await updateStep(session.id, "receipt_upload");
         await handleReceiptUpload(from, session, tenant, mediaId, mediaMime);
       } else if (choice === "invoice" || choice === "1" || text.includes("rechnung")) {
-        await supabase.from("sessions_handwerker").update({
-          step: "contact_search", manual_positions: [], updated_at: new Date().toISOString(),
-        }).eq("id", session.id);
-        await sendText(from, "Rechnung erstellen\n\nGib den Namen des Kunden ein um in Bexio zu suchen.\nOder schreibe *neu* um einen neuen Kontakt anzulegen.");
+        await updateStep(session.id, "invoice_choice");
+        await sendButtons(from, "Was moechtest du tun?", [
+          { id: "new_invoice", title: "Neue Rechnung" },
+          { id: "edit_draft", title: "Entwurf bearbeiten" },
+        ]);
       } else if (choice === "receipt" || choice === "2" || text.includes("beleg")) {
         await updateStep(session.id, "receipt_upload");
         await sendText(from, "Beleg erfassen\n\nSende mir ein Foto des Belegs.");
@@ -187,6 +188,133 @@ Deno.serve(async (req: Request) => {
           { id: "invoice", title: "Rechnung erstellen" },
           { id: "receipt", title: "Beleg erfassen" },
           { id: "search", title: "Kontakt suchen" },
+        ]);
+      }
+
+    } else if (step === "invoice_choice") {
+      if (choice === "new_invoice" || text.includes("neu")) {
+        await supabase.from("sessions_handwerker").update({
+          step: "contact_search", manual_positions: [], updated_at: new Date().toISOString(),
+        }).eq("id", session.id);
+        await sendText(from, "Neue Rechnung\n\nGib den Namen des Kunden ein um in Bexio zu suchen.\nOder schreibe *neu* um einen neuen Kontakt anzulegen.");
+      } else if (choice === "edit_draft" || text.includes("entwurf") || text.includes("bearbeiten")) {
+        if (!tenant || !tenant.bexio_access_token) {
+          await sendText(from, "Bexio ist noch nicht verbunden. Bitte verbinde zuerst dein Bexio-Konto.");
+        } else {
+          try {
+            var drafts = await bexioListDraftInvoices(tenant);
+            if (drafts.length === 0) {
+              await sendButtons(from, "Keine Entwurfs-Rechnungen gefunden.", [
+                { id: "new_invoice", title: "Neue Rechnung" },
+                { id: "reset", title: "Abbrechen" },
+              ]);
+            } else {
+              var draftRows: Array<{id: string; title: string; description: string}> = [];
+              drafts.slice(0, 10).forEach(function (inv: any) {
+                draftRows.push({
+                  id: "draft_" + inv.id,
+                  title: (inv.document_nr || "Rechnung").slice(0, 24),
+                  description: ((inv.title || "") + " - CHF " + (inv.total || "0")).slice(0, 72),
+                });
+              });
+              await sendList(from, drafts.length + " Entwurf(e) gefunden:", "Entwurf waehlen", [
+                { title: "Entwuerfe", rows: draftRows },
+              ]);
+              await supabase.from("sessions_handwerker").update({
+                step: "draft_select", search_results: drafts.slice(0, 10), updated_at: new Date().toISOString(),
+              }).eq("id", session.id);
+            }
+          } catch (draftErr) {
+            console.error("[Draft List] Error:", draftErr);
+            await sendText(from, "Fehler beim Laden der Entwuerfe: " + String(draftErr).slice(0, 200));
+          }
+        }
+      } else {
+        await sendButtons(from, "Bitte waehle:", [
+          { id: "new_invoice", title: "Neue Rechnung" },
+          { id: "edit_draft", title: "Entwurf bearbeiten" },
+        ]);
+      }
+
+    } else if (step === "draft_select") {
+      var draftMatch = (buttonId || listId || "").match(/^draft_(\d+)$/);
+      if (draftMatch) {
+        var draftId = parseInt(draftMatch[1], 10);
+        var drafts2 = (session.search_results || []) as any[];
+        var selectedDraft = drafts2.find(function (d: any) { return d.id === draftId; });
+        if (selectedDraft) {
+          await supabase.from("sessions_handwerker").update({
+            bexio_invoice_id: draftId,
+            invoice_title: selectedDraft.title || "Rechnung",
+            invoice_data: { document_nr: selectedDraft.document_nr, total: selectedDraft.total },
+            step: "draft_position_desc", updated_at: new Date().toISOString(),
+          }).eq("id", session.id);
+          await sendText(from,
+            "*Entwurf geoeffnet*\n\n" +
+            "Nr: " + (selectedDraft.document_nr || "-") + "\n" +
+            "Titel: " + (selectedDraft.title || "-") + "\n" +
+            "Aktuelles Total: CHF " + (selectedDraft.total || "0") + "\n\n" +
+            "Beschreibe die neue Position:"
+          );
+        } else {
+          await sendText(from, "Entwurf nicht gefunden. Bitte waehle aus der Liste.");
+        }
+      } else {
+        await sendText(from, "Bitte waehle einen Entwurf aus der Liste.");
+      }
+
+    } else if (step === "draft_position_desc") {
+      if (!msgBody) {
+        await sendText(from, "Bitte beschreibe die Position.");
+      } else {
+        await supabase.from("sessions_handwerker").update({
+          current_position_desc: msgBody, step: "draft_position_price", updated_at: new Date().toISOString(),
+        }).eq("id", session.id);
+        await sendText(from, "Position: *" + msgBody + "*\n\nPreis in CHF? (z.B. 150.00)");
+      }
+
+    } else if (step === "draft_position_price") {
+      var dPriceText = msgBody.replace("'", "").replace(",", ".");
+      var dPrice = parseFloat(dPriceText);
+      if (isNaN(dPrice) || dPrice <= 0) {
+        await sendText(from, "Bitte gib einen gueltigen Preis ein (z.B. 150.00).");
+      } else if (!tenant || !session.bexio_invoice_id) {
+        await sendText(from, "Fehler: Kein Entwurf ausgewaehlt.");
+      } else {
+        try {
+          await sendText(from, "Position wird hinzugefuegt...");
+          await bexioAddInvoicePosition(tenant, session.bexio_invoice_id, {
+            description: session.current_position_desc || "", price: dPrice,
+          });
+          var updated = await bexioGetInvoice(tenant, session.bexio_invoice_id);
+          await supabase.from("sessions_handwerker").update({
+            current_position_desc: null, current_position_price: null,
+            step: "draft_position_more", updated_at: new Date().toISOString(),
+          }).eq("id", session.id);
+          await sendButtons(from,
+            "Position hinzugefuegt!\n\nNeues Total: CHF " + (updated.total || "0"),
+            [
+              { id: "add_more_draft", title: "Weitere Position" },
+              { id: "finish_draft", title: "Fertig" },
+            ]
+          );
+        } catch (addErr) {
+          console.error("[Draft Add Position] Error:", addErr);
+          await sendText(from, "Fehler beim Hinzufuegen: " + String(addErr).slice(0, 200));
+        }
+      }
+
+    } else if (step === "draft_position_more") {
+      if (choice === "add_more_draft" || text === "ja" || text === "weitere") {
+        await updateStep(session.id, "draft_position_desc");
+        await sendText(from, "Beschreibe die naechste Position:");
+      } else if (choice === "finish_draft" || text === "fertig" || text === "nein") {
+        await sendText(from, "Fertig! Der Entwurf wurde aktualisiert. Du findest ihn in Bexio.");
+        await resetSession(session.id);
+      } else {
+        await sendButtons(from, "Was moechtest du tun?", [
+          { id: "add_more_draft", title: "Weitere Position" },
+          { id: "finish_draft", title: "Fertig" },
         ]);
       }
 
@@ -723,6 +851,104 @@ async function bexioIssueInvoice(tenant: any, invoiceId: number): Promise<void> 
   await fetch("https://api.bexio.com/2.0/kb_invoice/" + invoiceId + "/issue", {
     method: "POST", headers: { Authorization: "Bearer " + token },
   });
+}
+
+async function bexioListDraftInvoices(tenant: any): Promise<any[]> {
+  var token = await getBexioToken(tenant);
+  console.log("[Bexio] Listing draft invoices...");
+  // kb_item_status_id = 7 = Draft (Entwurf) in Bexio
+  var resp = await fetch("https://api.bexio.com/2.0/kb_invoice/search?limit=50&order_by=id_desc", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify([{ field: "kb_item_status_id", value: 7, criteria: "=" }]),
+  });
+  if (!resp.ok) {
+    var errText = await resp.text();
+    console.error("[Bexio] List drafts error:", resp.status, errText);
+    throw new Error("Bexio Entwurfsliste fehlgeschlagen (" + resp.status + ")");
+  }
+  var data = await resp.json();
+  if (!Array.isArray(data)) {
+    console.error("[Bexio] List drafts returned non-array:", JSON.stringify(data).slice(0, 200));
+    return [];
+  }
+  console.log("[Bexio] Found", data.length, "drafts");
+  return data;
+}
+
+async function bexioGetInvoice(tenant: any, invoiceId: number): Promise<any> {
+  var token = await getBexioToken(tenant);
+  var resp = await fetch("https://api.bexio.com/2.0/kb_invoice/" + invoiceId, {
+    headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+  });
+  if (!resp.ok) {
+    throw new Error("Bexio Rechnung laden fehlgeschlagen (" + resp.status + ")");
+  }
+  return resp.json();
+}
+
+async function bexioAddInvoicePosition(
+  tenant: any,
+  invoiceId: number,
+  pos: { description: string; price: number },
+): Promise<any> {
+  var token = await getBexioToken(tenant);
+
+  // Ensure account_id and tax_id are available
+  var accountId = tenant.bexio_account_id;
+  var taxId = tenant.bexio_tax_id;
+  var needsUpd = false;
+
+  if (!accountId) {
+    var accResp = await fetch("https://api.bexio.com/2.0/accounts", {
+      headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+    });
+    if (accResp.ok) {
+      var accs = await accResp.json();
+      var revAcc = Array.isArray(accs) ? accs.find(function (a: any) { return a.account_no && String(a.account_no).startsWith("3"); }) : null;
+      if (revAcc) { accountId = revAcc.id; needsUpd = true; }
+    }
+  }
+  if (!taxId) {
+    var taxResp2 = await fetch("https://api.bexio.com/3.0/taxes", {
+      headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+    });
+    if (taxResp2.ok) {
+      var taxes2 = await taxResp2.json();
+      var stax = Array.isArray(taxes2) ? taxes2.find(function (t: any) { return t.type === "sales_tax" && t.is_active; }) : null;
+      if (stax) { taxId = stax.id; needsUpd = true; }
+    }
+  }
+  if (needsUpd) {
+    await supabase.from("tenants").update({
+      bexio_account_id: accountId, bexio_tax_id: taxId,
+    }).eq("id", tenant.id);
+  }
+
+  if (!accountId) {
+    throw new Error("Kein Ertragskonto gefunden. Bitte pruefe deine Bexio-Konfiguration.");
+  }
+
+  var body: any = {
+    amount: "1",
+    unit_price: pos.price.toFixed(2),
+    text: pos.description,
+    account_id: accountId,
+  };
+  if (taxId) body.tax_id = taxId;
+
+  console.log("[Bexio] Adding position to invoice", invoiceId);
+  var resp = await fetch("https://api.bexio.com/2.0/kb_invoice/" + invoiceId + "/kb_position_custom", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    var errText2 = await resp.text();
+    console.error("[Bexio] Add position error:", resp.status, errText2);
+    throw new Error("Bexio Position (" + resp.status + "): " + errText2.slice(0, 200));
+  }
+  return resp.json();
 }
 
 // ===== Receipt mit Claude AI =====
