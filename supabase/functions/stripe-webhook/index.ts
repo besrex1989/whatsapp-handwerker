@@ -87,23 +87,36 @@ serve(async (req) => {
           ? PRICE_TO_PLAN[priceId]
           : (active ? "active" : "past_due");
 
+        // Cache the period dates so the dashboard can show "gestartet am"
+        // and "nächste Abrechnung am" without needing to hit Stripe.
+        const startedAt = sub.start_date
+          ? new Date(sub.start_date * 1000).toISOString()
+          : null;
+        const renewsAt = (sub as any).current_period_end
+          ? new Date((sub as any).current_period_end * 1000).toISOString()
+          : null;
+        const cancelAtPeriodEnd = !!sub.cancel_at_period_end;
+
         // Prefer subscription.metadata.tenant_id (set by stripe-checkout);
         // fall back to matching by stripe_subscription_id for subscriptions
         // created before we started stamping metadata.
         const tenantId = sub.metadata?.tenant_id;
+        const commonFields = {
+          plan: active ? planLabel : "past_due",
+          is_active: active,
+          subscription_started_at: startedAt,
+          subscription_renews_at: renewsAt,
+          subscription_cancel_at_period_end: cancelAtPeriodEnd,
+          updated_at: new Date().toISOString(),
+        };
         const query = tenantId
           ? supabase.from("tenants").update({
-              plan: active ? planLabel : "past_due",
-              is_active: active,
+              ...commonFields,
               stripe_subscription_id: sub.id,
               stripe_customer_id: sub.customer,
-              updated_at: new Date().toISOString(),
             }).eq("id", tenantId)
-          : supabase.from("tenants").update({
-              plan: active ? planLabel : "past_due",
-              is_active: active,
-              updated_at: new Date().toISOString(),
-            }).eq("stripe_subscription_id", sub.id);
+          : supabase.from("tenants").update(commonFields)
+              .eq("stripe_subscription_id", sub.id);
 
         await query;
         break;

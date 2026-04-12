@@ -786,6 +786,26 @@ body {
   border-radius: 4px;
 }
 
+.sub-features {
+  list-style: none;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.sub-features li {
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.sub-features li::before {
+  content: "\2713";
+  color: var(--primary);
+  margin-right: 8px;
+  font-weight: 600;
+}
+
 .logout-btn {
   background: none;
   border: none;

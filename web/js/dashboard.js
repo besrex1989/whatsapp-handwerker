@@ -493,10 +493,40 @@ function renderSubscriptionCard(tenant, planRaw, isActive) {
   actionsEl.innerHTML = "";
 
   if (isActive) {
-    var planLabel = planRaw === "active_yearly" ? "Jaehrlich (199 CHF / Jahr)"
+    var planLabel = planRaw === "active_yearly" ? "Jährlich (199 CHF / Jahr)"
       : planRaw === "active_monthly" ? "Monatlich (19 CHF / Monat)"
       : "Aktiv";
-    infoEl.innerHTML = "<strong>Dein Abo ist aktiv.</strong><br>Plan: " + planLabel;
+
+    // Build the info block as a stack of label/value rows (matching the
+    // other dashboard cards) plus a feature list.
+    var rows = "";
+    rows += subRow("Plan", planLabel);
+    if (tenant.subscription_started_at) {
+      rows += subRow("Gestartet am", formatDate(tenant.subscription_started_at));
+    }
+    if (tenant.subscription_renews_at) {
+      var renewsLabel = tenant.subscription_cancel_at_period_end
+        ? "Läuft ab am"
+        : "Nächste Abrechnung";
+      rows += subRow(renewsLabel, formatDate(tenant.subscription_renews_at));
+    }
+
+    var features = [
+      "Unbegrenzte Rechnungen",
+      "Unbegrenzte Angebote",
+      "Bexio Integration",
+      "WhatsApp Bot & PDF-Vorschau",
+      "E-Mail Support",
+    ];
+    var featuresList = '<ul class="sub-features">' +
+      features.map(function (f) { return "<li>" + f + "</li>"; }).join("") +
+      "</ul>";
+
+    var cancelNote = tenant.subscription_cancel_at_period_end
+      ? '<p class="help-text" style="margin-top: 10px;">Dein Abo wurde gekündigt und läuft am oben genannten Datum aus.</p>'
+      : "";
+
+    infoEl.innerHTML = rows + featuresList + cancelNote;
 
     var manageBtn = document.createElement("button");
     manageBtn.className = "btn btn-outline";
@@ -662,6 +692,27 @@ async function openBillingPortal() {
     console.error("[openBillingPortal] exception:", err);
     alert("Netzwerkfehler: " + err.message);
   }
+}
+
+// ----- Helpers used by renderSubscriptionCard -----
+
+function subRow(label, value) {
+  return '<div class="dash-row">' +
+    '<span class="label">' + escapeHtml(label) + "</span>" +
+    '<span class="value">' + escapeHtml(value) + "</span>" +
+    "</div>";
+}
+
+function formatDate(iso) {
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("de-CH", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 // Load dashboard on page load
