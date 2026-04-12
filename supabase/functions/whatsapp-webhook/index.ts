@@ -353,9 +353,31 @@ Deno.serve(async (req: Request) => {
         await sendText(from, "Bitte beschreibe die Position.");
       } else {
         await supabase.from("sessions_handwerker").update({
-          current_position_desc: msgBody, step: "draft_position_price", updated_at: new Date().toISOString(),
+          current_position_desc: msgBody, step: "draft_position_amount", updated_at: new Date().toISOString(),
         }).eq("id", session.id);
-        await sendText(from, "Position: *" + msgBody + "*\n\nPreis in CHF? (z.B. 150.00)");
+        await sendText(from,
+          "Position: *" + msgBody + "*\n\n" +
+          "Menge und Einheit?\n" +
+          "(z.B. *5 Std*, *2.5 m2*, *3 Stk* oder *pauschal*)"
+        );
+      }
+
+    } else if (step === "draft_position_amount") {
+      var dParsedAu = parseAmountUnit(msgBody);
+      if (!dParsedAu) {
+        await sendText(from,
+          "Bitte im Format *5 Std*, *2.5 m2*, *pauschal* oder nur *1*."
+        );
+      } else {
+        await supabase.from("sessions_handwerker").update({
+          current_position_amount: dParsedAu.amount,
+          current_position_unit: dParsedAu.unit,
+          step: "draft_position_price", updated_at: new Date().toISOString(),
+        }).eq("id", session.id);
+        var dPricePrompt = (dParsedAu.amount !== 1 && dParsedAu.unit)
+          ? "Preis pro " + dParsedAu.unit + " in CHF? (z.B. 120.00)"
+          : "Preis in CHF? (z.B. 150.00)";
+        await sendText(from, dPricePrompt);
       }
 
     } else if (step === "draft_position_price") {
@@ -368,12 +390,20 @@ Deno.serve(async (req: Request) => {
       } else {
         try {
           await sendText(from, "Position wird hinzugefuegt...");
+          var dAmt = typeof session.current_position_amount === "number"
+            ? session.current_position_amount
+            : parseFloat(session.current_position_amount || "1");
+          if (isNaN(dAmt) || dAmt <= 0) dAmt = 1;
           await bexioAddInvoicePosition(tenant, session.bexio_invoice_id, {
-            description: session.current_position_desc || "", price: dPrice,
+            description: session.current_position_desc || "",
+            amount: dAmt,
+            unit: session.current_position_unit || "",
+            price: dPrice,
           });
           var updated = await bexioGetInvoice(tenant, session.bexio_invoice_id);
           await supabase.from("sessions_handwerker").update({
             current_position_desc: null, current_position_price: null,
+            current_position_amount: null, current_position_unit: null,
             step: "draft_position_more", updated_at: new Date().toISOString(),
           }).eq("id", session.id);
           await sendButtons(from,
@@ -574,9 +604,31 @@ Deno.serve(async (req: Request) => {
         await sendText(from, "Bitte beschreibe die Position.");
       } else {
         await supabase.from("sessions_handwerker").update({
-          current_position_desc: msgBody, step: "position_price", updated_at: new Date().toISOString(),
+          current_position_desc: msgBody, step: "position_amount", updated_at: new Date().toISOString(),
         }).eq("id", session.id);
-        await sendText(from, "Position: *" + msgBody + "*\n\nPreis in CHF? (z.B. 150.00)");
+        await sendText(from,
+          "Position: *" + msgBody + "*\n\n" +
+          "Menge und Einheit?\n" +
+          "(z.B. *5 Std*, *2.5 m2*, *3 Stk* oder *pauschal*)"
+        );
+      }
+
+    } else if (step === "position_amount") {
+      var parsedAu = parseAmountUnit(msgBody);
+      if (!parsedAu) {
+        await sendText(from,
+          "Bitte im Format *5 Std*, *2.5 m2*, *pauschal* oder nur *1*."
+        );
+      } else {
+        await supabase.from("sessions_handwerker").update({
+          current_position_amount: parsedAu.amount,
+          current_position_unit: parsedAu.unit,
+          step: "position_price", updated_at: new Date().toISOString(),
+        }).eq("id", session.id);
+        var pricePrompt = (parsedAu.amount !== 1 && parsedAu.unit)
+          ? "Preis pro " + parsedAu.unit + " in CHF? (z.B. 120.00)"
+          : "Preis in CHF? (z.B. 150.00)";
+        await sendText(from, pricePrompt);
       }
 
     } else if (step === "position_price") {
@@ -585,11 +637,25 @@ Deno.serve(async (req: Request) => {
       if (isNaN(price) || price <= 0) {
         await sendText(from, "Bitte gib einen gueltigen Preis ein (z.B. 150.00).");
       } else {
+        var pAmt = typeof session.current_position_amount === "number"
+          ? session.current_position_amount
+          : parseFloat(session.current_position_amount || "1");
+        if (isNaN(pAmt) || pAmt <= 0) pAmt = 1;
+        var pUnit = session.current_position_unit || "";
+        var lineTotal = Math.round(pAmt * price * 100) / 100;
         var positions = session.manual_positions || [];
-        positions.push({ description: session.current_position_desc || "", price: price });
-        var total = positions.reduce(function (s: number, p: any) { return s + p.price; }, 0);
+        positions.push({
+          description: session.current_position_desc || "",
+          amount: pAmt, unit: pUnit, price: price, total: lineTotal,
+        });
+        var total = positions.reduce(function (s: number, p: any) {
+          var lt = typeof p.total === "number" ? p.total : (p.amount || 1) * (p.price || 0);
+          return s + lt;
+        }, 0);
         await supabase.from("sessions_handwerker").update({
-          manual_positions: positions, current_position_desc: null, current_position_price: null,
+          manual_positions: positions,
+          current_position_desc: null, current_position_price: null,
+          current_position_amount: null, current_position_unit: null,
           step: "position_more", updated_at: new Date().toISOString(),
         }).eq("id", session.id);
         await sendButtons(from,
@@ -607,14 +673,17 @@ Deno.serve(async (req: Request) => {
         await sendText(from, "Beschreibe die naechste Position:");
       } else if (choice === "finish" || text === "fertig" || text === "nein" || text === "erstellen") {
         var positions2 = session.manual_positions || [];
-        var total2 = positions2.reduce(function (s: number, p: any) { return s + p.price; }, 0);
+        var total2 = positions2.reduce(function (s: number, p: any) {
+          var lt = typeof p.total === "number" ? p.total : (p.amount || 1) * (p.price || 0);
+          return s + lt;
+        }, 0);
         var cData = session.contact_data as any;
         var cName = cData ? cData.name : ("ID " + session.bexio_contact_id);
         var summary = "*Rechnungs-Zusammenfassung*\n\n";
         summary += "Titel: " + session.invoice_title + "\n";
         summary += "Kunde: " + cName + "\n\n";
         positions2.forEach(function (p: any, i: number) {
-          summary += (i + 1) + ". " + p.description + " - CHF " + p.price.toFixed(2) + "\n";
+          summary += (i + 1) + ". " + formatPositionLine(p) + "\n";
         });
         summary += "\n*Total: CHF " + total2.toFixed(2) + "*";
         await sendText(from, summary);
@@ -788,7 +857,9 @@ async function resetSession(sessionId: string): Promise<void> {
   await supabase.from("sessions_handwerker").update({
     step: "start", contact_data: null, bexio_contact_id: null, bexio_invoice_id: null,
     bexio_invoice_nr: null, invoice_title: null, invoice_data: null, manual_positions: null,
-    current_position_desc: null, current_position_price: null, receipt_data: null,
+    current_position_desc: null, current_position_price: null,
+    current_position_amount: null, current_position_unit: null,
+    receipt_data: null,
     receipt_base64: null, receipt_type: null, search_results: null,
     expires_at: expiresAt, updated_at: new Date().toISOString(),
   }).eq("id", sessionId);
@@ -1001,9 +1072,20 @@ async function bexioCreateInvoice(tenant: any, params: { contactId: number; titl
   var today = new Date().toISOString().split("T")[0];
   var dueDate = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
   var positionItems = params.positions.map(function (p: any) {
+    var amt = typeof p.amount === "number" ? p.amount : parseFloat(p.amount || "1");
+    if (isNaN(amt) || amt <= 0) amt = 1;
+    // Embed the unit in the position text so it appears on the printed
+    // invoice. (Proper unit_id lookup via Bexio /2.0/unit could come later;
+    // for now the unit shows in the description column, which is visible
+    // to the customer and unambiguous.)
+    var txt = p.description || "";
+    if (p.unit) txt = txt + " (" + p.unit + ")";
     var pos: any = {
-      type: "KbPositionCustom", text: p.description, unit_price: p.price.toFixed(2),
-      amount: "1", account_id: accountId,
+      type: "KbPositionCustom",
+      text: txt,
+      unit_price: (p.price || 0).toFixed(2),
+      amount: String(amt),
+      account_id: accountId,
     };
     if (taxId) pos.tax_id = taxId;
     return pos;
@@ -1080,7 +1162,7 @@ async function bexioGetInvoice(tenant: any, invoiceId: number): Promise<any> {
 async function bexioAddInvoicePosition(
   tenant: any,
   invoiceId: number,
-  pos: { description: string; price: number },
+  pos: { description: string; price: number; amount?: number; unit?: string },
 ): Promise<any> {
   var token = await getBexioToken(tenant);
 
@@ -1119,10 +1201,14 @@ async function bexioAddInvoicePosition(
     throw new Error("Kein Ertragskonto gefunden. Bitte pruefe deine Bexio-Konfiguration.");
   }
 
+  var addAmt = typeof pos.amount === "number" ? pos.amount : parseFloat(String(pos.amount || "1"));
+  if (isNaN(addAmt) || addAmt <= 0) addAmt = 1;
+  var addTxt = pos.description || "";
+  if (pos.unit) addTxt = addTxt + " (" + pos.unit + ")";
   var body: any = {
-    amount: "1",
+    amount: String(addAmt),
     unit_price: pos.price.toFixed(2),
-    text: pos.description,
+    text: addTxt,
     account_id: accountId,
   };
   if (taxId) body.tax_id = taxId;
@@ -1139,6 +1225,57 @@ async function bexioAddInvoicePosition(
     throw new Error("Bexio Position (" + resp.status + "): " + errText2.slice(0, 200));
   }
   return resp.json();
+}
+
+// ===== Position amount/unit parsing =====
+
+// Parse free-text like "5 Std", "2.5 m2", "3,5 kg", "1 pauschal", "pauschal",
+// or just "1". Returns null for invalid input so the caller can re-prompt.
+function parseAmountUnit(input: string): { amount: number; unit: string } | null {
+  var t = String(input || "").trim();
+  if (!t) return null;
+  if (t.toLowerCase() === "pauschal" || t.toLowerCase() === "einmalig") {
+    return { amount: 1, unit: "" };
+  }
+  // <number> [<unit>]  — number may use . or , as decimal separator
+  var m = t.match(/^([0-9]+(?:[.,][0-9]+)?)\s*(.*)$/);
+  if (!m) return null;
+  var amt = parseFloat(m[1].replace(",", "."));
+  if (isNaN(amt) || amt <= 0) return null;
+  return { amount: amt, unit: normalizeUnit((m[2] || "").trim()) };
+}
+
+// Map common shorthand/typos to canonical display units.
+function normalizeUnit(u: string): string {
+  if (!u) return "";
+  var lc = u.toLowerCase();
+  var map: Record<string, string> = {
+    "h": "Std", "std": "Std", "stunde": "Std", "stunden": "Std", "hr": "Std",
+    "stk": "Stk", "stueck": "Stk", "stück": "Stk", "pc": "Stk", "pcs": "Stk",
+    "m": "m", "meter": "m",
+    "m2": "m²", "m²": "m²", "qm": "m²",
+    "m3": "m³", "m³": "m³",
+    "kg": "kg",
+    "g": "g",
+    "l": "l", "liter": "l",
+    "tag": "Tag", "tage": "Tag",
+    "pauschal": "",
+  };
+  return map[lc] || u;
+}
+
+// Human-friendly line for summary / display.
+function formatPositionLine(p: any): string {
+  var amt = typeof p.amount === "number" ? p.amount : parseFloat(p.amount || "1");
+  if (isNaN(amt) || amt <= 0) amt = 1;
+  var unitStr = p.unit ? " " + p.unit : "";
+  var total = typeof p.total === "number" ? p.total : (amt * (p.price || 0));
+  // Hide the "1 × 120 = 120" redundancy for pauschal positions
+  if (amt === 1 && !p.unit) {
+    return p.description + " - CHF " + total.toFixed(2);
+  }
+  return p.description + " (" + amt + unitStr + " a CHF " + (p.price || 0).toFixed(2) +
+    ") - CHF " + total.toFixed(2);
 }
 
 // ===== Receipt mit Claude AI =====
