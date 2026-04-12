@@ -1000,12 +1000,17 @@ async function bexioCreateContact(tenant: any, c: { name: string; address: strin
 
 // Fetch-or-use-cached Bexio per-tenant ids (user_id, account_id, tax_id).
 // Force=true ignores the cached values and always pulls fresh from Bexio.
+// Also returns an ordered list of alternative tax candidates so callers can
+// fall back to the next one if Bexio rejects the first choice on invoice
+// creation (e.g. tenant has a historic 7.7% entry that Bexio no longer
+// accepts for 2024+ invoices).
 async function ensureBexioIds(
   tenant: any, token: string, force: boolean,
-): Promise<{ userId: number | null; accountId: number | null; taxId: number | null }> {
+): Promise<{ userId: number | null; accountId: number | null; taxId: number | null; taxCandidates: number[] }> {
   var userId = force ? null : tenant.bexio_user_id;
   var accountId = force ? null : tenant.bexio_account_id;
   var taxId = force ? null : tenant.bexio_tax_id;
+  var taxCandidates: number[] = [];
   var updated = false;
 
   if (!userId) {
@@ -1034,10 +1039,8 @@ async function ensureBexioIds(
   }
   if (!taxId) {
     // Fetch taxes from both the /3.0 and the legacy /2.0 endpoint and merge
-    // the results. Some Bexio instances return an empty list on /3.0/taxes
-    // (observed for certain Saldosteuer tenants or when the app lacks an
-    // implicit scope) but still respond normally on /2.0/tax. We dedupe by
-    // id and feed everything into the same selector below.
+    // the results. /3.0/taxes returns empty for many tenants (observed),
+    // /2.0/tax is the reliable source. We dedupe by id.
     console.log("[Bexio] Fetching taxes...");
     async function fetchTaxList(path: string): Promise<any[]> {
       try {
@@ -1049,7 +1052,6 @@ async function ensureBexioIds(
           return [];
         }
         var j = await r.json();
-        // Accept bare arrays, { data: [...] }, or { items: [...] } shapes.
         if (Array.isArray(j)) return j;
         if (j && Array.isArray(j.data)) return j.data;
         if (j && Array.isArray(j.items)) return j.items;
@@ -1071,53 +1073,80 @@ async function ensureBexioIds(
       return true;
     });
 
-    // Log a compact dump so we can tell effective vs Saldosteuer setups
-    // apart in the Edge Function logs if the selection goes wrong.
+    // Dump the full list (all fields) so we can diagnose weird setups from
+    // the Edge Function logs without having to guess at the schema.
     console.log("[Bexio] Taxes found (3.0=" + taxes3.length + ", 2.0=" + taxes2.length + ", merged=" + taxes.length + "):",
-      JSON.stringify(taxes.slice(0, 20).map(function (t: any) {
-        return { id: t.id, type: t.type, code: t.code, value: t.value, is_active: t.is_active };
-      })));
+      JSON.stringify(taxes));
 
-    // Bexio returns all configured taxes — the shape differs between
-    // "effektive Methode" (type=sales_tax with standard rates like 8.1)
-    // and "Saldosteuersatz" (type often still sales_tax but with the
-    // tenant-specific saldo rate; or type variants like sales_tax_saldo).
-    // Strategy: pick any active sales-side entry with the highest
-    // positive rate. Works for both methods.
+    var currentYear = new Date().getFullYear();
+
     function isSalesLike(t: any): boolean {
       var ty = String(t.type || "").toLowerCase();
       // sales_tax, sales_tax_saldo, sales_tax_reduced, ...
-      // skip pre_tax, acquisition_tax, etc. (input-side).
       return ty.indexOf("sales") === 0;
     }
-    // is_active missing is treated as active (some /2.0 responses omit it).
     function isActive(t: any): boolean {
       return t.is_active === undefined || t.is_active === null ? true : !!t.is_active;
     }
-    var candidates = taxes.filter(function (t: any) {
+    // Valid for the current year: start_year <= year and (end_year >= year
+    // or end_year missing). Missing start_year is treated as valid.
+    // This is what excludes the historic Swiss 7.7% (UN77) tax whose
+    // end_year is typically 2023 while the current year is 2024+.
+    function isCurrentlyValid(t: any): boolean {
+      var sy = t.start_year != null ? parseInt(String(t.start_year), 10) : null;
+      var ey = t.end_year != null ? parseInt(String(t.end_year), 10) : null;
+      if (sy && sy > currentYear) return false;
+      if (ey && ey < currentYear) return false;
+      return true;
+    }
+
+    // Build an ordered candidate list — best match first.
+    //   tier 1: active, sales-like, currently valid, positive rate
+    //   tier 2: active, sales-like, positive rate (ignore year)
+    //   tier 3: active, sales-like (any rate)
+    //   tier 4: active (any type)
+    // Within each tier we sort by year-validity first, then by rate (desc).
+    var byPriority: any[] = [];
+    var seen: Record<string, boolean> = {};
+    function addTier(list: any[]) {
+      list.sort(function (a: any, b: any) {
+        var av = isCurrentlyValid(a) ? 1 : 0;
+        var bv = isCurrentlyValid(b) ? 1 : 0;
+        if (av !== bv) return bv - av;
+        var ra = parseFloat(String(a.value || "0"));
+        var rb = parseFloat(String(b.value || "0"));
+        return rb - ra;
+      });
+      for (var i = 0; i < list.length; i++) {
+        var k = String(list[i].id);
+        if (seen[k]) continue;
+        seen[k] = true;
+        byPriority.push(list[i]);
+      }
+    }
+    addTier(taxes.filter(function (t: any) {
+      return isActive(t) && isSalesLike(t) && isCurrentlyValid(t) && parseFloat(String(t.value || "0")) > 0;
+    }));
+    addTier(taxes.filter(function (t: any) {
       return isActive(t) && isSalesLike(t) && parseFloat(String(t.value || "0")) > 0;
-    });
-    // Relax to any active sales-like tax if no positive-rate candidate.
-    if (candidates.length === 0) {
-      candidates = taxes.filter(function (t: any) { return isActive(t) && isSalesLike(t); });
-    }
-    // Last resort: any active tax at all (really unusual setups).
-    if (candidates.length === 0) {
-      candidates = taxes.filter(function (t: any) { return isActive(t); });
-    }
-    candidates.sort(function (a: any, b: any) {
-      var va = parseFloat(String(a.value || "0"));
-      var vb = parseFloat(String(b.value || "0"));
-      return vb - va; // highest rate first
-    });
-    var sales = candidates[0] || null;
+    }));
+    addTier(taxes.filter(function (t: any) {
+      return isActive(t) && isSalesLike(t);
+    }));
+    addTier(taxes.filter(function (t: any) { return isActive(t); }));
+
+    taxCandidates = byPriority.map(function (t: any) { return t.id; });
+
+    var sales = byPriority[0] || null;
     if (sales) {
-      console.log("[Bexio] Selected tax:", sales.id, "type=" + sales.type, "value=" + sales.value, "code=" + (sales.code || ""));
+      console.log("[Bexio] Selected tax:", sales.id,
+        "type=" + sales.type, "value=" + sales.value, "code=" + (sales.code || ""),
+        "years=[" + (sales.start_year || "") + "-" + (sales.end_year || "") + "]");
+      console.log("[Bexio] Tax candidates (ordered):", JSON.stringify(taxCandidates));
       taxId = sales.id;
       updated = true;
     } else {
-      console.warn("[Bexio] No usable tax found in either /3.0/taxes or /2.0/tax. Full merged list was:",
-        JSON.stringify(taxes.slice(0, 20)));
+      console.warn("[Bexio] No usable tax found in either /3.0/taxes or /2.0/tax.");
     }
   }
   if (updated) {
@@ -1130,7 +1159,7 @@ async function ensureBexioIds(
     tenant.bexio_account_id = accountId;
     tenant.bexio_tax_id = taxId;
   }
-  return { userId: userId, accountId: accountId, taxId: taxId };
+  return { userId: userId, accountId: accountId, taxId: taxId, taxCandidates: taxCandidates };
 }
 
 // Detect "stale cached id" errors in a Bexio 422 body.
@@ -1144,24 +1173,42 @@ function isBexioIdValidationError(errText: string): boolean {
 async function bexioCreateInvoice(tenant: any, params: { contactId: number; title: string; positions: any[] }): Promise<any> {
   var token = await getBexioToken(tenant);
 
-  // force  : refetch user/account/tax ids ignoring the cache
-  // noTax  : omit tax_id entirely (last-resort fallback for tenants whose
-  //          Bexio instance rejects every fetched tax_id — e.g. a company
-  //          that is not VAT-registered or has a broken tax configuration)
-  async function postOnce(force: boolean, noTax: boolean): Promise<Response> {
-    var ids = await ensureBexioIds(tenant, token, force);
+  // Build a single prioritized list of tax options to try in sequence:
+  //   1. Cached tax_id (if set)
+  //   2. Ordered candidates from ensureBexioIds (current year first, then fallbacks)
+  //   3. null (no tax_id, last-resort)
+  // We do a force-refresh on the first real candidate run to avoid using a
+  // stale cached id that has since been retired.
+  var ids = await ensureBexioIds(tenant, token, false);
+  if (!ids.userId || !ids.accountId) {
+    // Try a force refresh once in case user_id/account_id are missing.
+    ids = await ensureBexioIds(tenant, token, true);
     if (!ids.userId || !ids.accountId) {
-      throw new Error("Bexio-Konfiguration unvollstaendig (user_id=" + ids.userId + ", account_id=" + ids.accountId + ", tax_id=" + ids.taxId + ")");
+      throw new Error("Bexio-Konfiguration unvollstaendig (user_id=" + ids.userId + ", account_id=" + ids.accountId + ")");
     }
-    var today = new Date().toISOString().split("T")[0];
-    var dueDate = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
+  }
+
+  var taxAttempts: (number | null)[] = [];
+  var seen: Record<string, boolean> = {};
+  function pushTax(t: number | null) {
+    var k = t == null ? "null" : String(t);
+    if (seen[k]) return;
+    seen[k] = true;
+    taxAttempts.push(t);
+  }
+  if (ids.taxId != null) pushTax(ids.taxId);
+  for (var i = 0; i < ids.taxCandidates.length; i++) pushTax(ids.taxCandidates[i]);
+  pushTax(null); // final fallback: omit tax_id
+
+  var today = new Date().toISOString().split("T")[0];
+  var dueDate = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
+
+  function buildBody(taxOverride: number | null): any {
     var positionItems = params.positions.map(function (p: any) {
       var amt = typeof p.amount === "number" ? p.amount : parseFloat(p.amount || "1");
       if (isNaN(amt) || amt <= 0) amt = 1;
       // Embed the unit in the position text so it appears on the printed
-      // invoice. (Proper unit_id lookup via Bexio /2.0/unit could come later;
-      // for now the unit shows in the description column, which is visible
-      // to the customer and unambiguous.)
+      // invoice. Proper unit_id lookup via /2.0/unit could come later.
       var txt = p.description || "";
       if (p.unit) txt = txt + " (" + p.unit + ")";
       var pos: any = {
@@ -1171,48 +1218,54 @@ async function bexioCreateInvoice(tenant: any, params: { contactId: number; titl
         amount: String(amt),
         account_id: ids.accountId,
       };
-      if (!noTax && ids.taxId) pos.tax_id = ids.taxId;
+      if (taxOverride != null) pos.tax_id = taxOverride;
       return pos;
     });
-    console.log("[Bexio] Creating invoice", { userId: ids.userId, accountId: ids.accountId, taxId: noTax ? "(omitted)" : ids.taxId, force: force });
-    return await fetch("https://api.bexio.com/2.0/kb_invoice", {
-      method: "POST",
-      headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({
-        title: params.title, contact_id: params.contactId, user_id: ids.userId,
-        is_valid_from: today, is_valid_to: dueDate, mwst_type: 0, mwst_is_net: true, positions: positionItems,
-      }),
-    });
+    return {
+      title: params.title, contact_id: params.contactId, user_id: ids.userId,
+      is_valid_from: today, is_valid_to: dueDate, mwst_type: 0, mwst_is_net: true, positions: positionItems,
+    };
   }
 
-  // 1) First attempt with cached ids + tax_id
-  var resp = await postOnce(false, false);
-  // 2) On 422 with id error: force-refresh ids and retry
-  if (resp.status === 422) {
-    var errText0 = await resp.text();
-    if (isBexioIdValidationError(errText0)) {
-      console.warn("[Bexio] Invoice create 422 with id error — force-refreshing ids and retrying:", errText0.slice(0, 200));
-      resp = await postOnce(true, false);
-    } else {
-      throw new Error("Bexio Rechnung (422): " + errText0.slice(0, 300));
+  var lastErrText = "";
+  var lastStatus = 0;
+  for (var j = 0; j < taxAttempts.length; j++) {
+    var attemptTax = taxAttempts[j];
+    console.log("[Bexio] Creating invoice", {
+      attempt: j + 1, of: taxAttempts.length,
+      userId: ids.userId, accountId: ids.accountId,
+      taxId: attemptTax == null ? "(omitted)" : attemptTax,
+    });
+    var resp = await fetch("https://api.bexio.com/2.0/kb_invoice", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(buildBody(attemptTax)),
+    });
+    if (resp.ok) {
+      // Cache the winning tax_id so future invoices skip straight to it.
+      if (attemptTax != null && attemptTax !== tenant.bexio_tax_id) {
+        await supabase.from("tenants").update({
+          bexio_tax_id: attemptTax, updated_at: new Date().toISOString(),
+        }).eq("id", tenant.id);
+        tenant.bexio_tax_id = attemptTax;
+      }
+      return resp.json();
+    }
+    lastStatus = resp.status;
+    lastErrText = await resp.text();
+    console.warn("[Bexio] Invoice attempt " + (j + 1) + " failed:", resp.status, lastErrText.slice(0, 200));
+    // If the error is not about tax_id, no point trying other tax_ids —
+    // break out with the original error.
+    if (resp.status === 422 && !/tax_id/i.test(lastErrText)) {
+      break;
+    }
+    // If it's a 422 with a non-id field validation that's unrelated, also break.
+    if (resp.status !== 422) {
+      break;
     }
   }
-  // 3) If retry still 422 on tax_id: last-resort retry without tax_id
-  if (resp.status === 422) {
-    var errText1 = await resp.text();
-    if (/tax_id/i.test(errText1)) {
-      console.warn("[Bexio] Invoice create 422 still tax_id after refresh — retrying without tax_id:", errText1.slice(0, 200));
-      resp = await postOnce(false, true);
-    } else {
-      throw new Error("Bexio Rechnung (422): " + errText1.slice(0, 300));
-    }
-  }
-  if (!resp.ok) {
-    var errText = await resp.text();
-    console.error("[Bexio] Invoice create error:", resp.status, errText);
-    throw new Error("Bexio Rechnung (" + resp.status + "): " + errText.slice(0, 300));
-  }
-  return resp.json();
+  console.error("[Bexio] Invoice create error after", taxAttempts.length, "attempts:", lastStatus, lastErrText);
+  throw new Error("Bexio Rechnung (" + lastStatus + "): " + lastErrText.slice(0, 300));
 }
 
 async function bexioIssueInvoice(tenant: any, invoiceId: number): Promise<void> {
@@ -1280,52 +1333,64 @@ async function bexioAddInvoicePosition(
   var addTxt = pos.description || "";
   if (pos.unit) addTxt = addTxt + " (" + pos.unit + ")";
 
-  async function postOnce(force: boolean, noTax: boolean): Promise<Response> {
-    var ids = await ensureBexioIds(tenant, token, force);
+  var ids = await ensureBexioIds(tenant, token, false);
+  if (!ids.accountId) {
+    ids = await ensureBexioIds(tenant, token, true);
     if (!ids.accountId) {
       throw new Error("Kein Ertragskonto gefunden. Bitte pruefe deine Bexio-Konfiguration.");
     }
+  }
+
+  var taxAttempts: (number | null)[] = [];
+  var seen: Record<string, boolean> = {};
+  function pushTax(t: number | null) {
+    var k = t == null ? "null" : String(t);
+    if (seen[k]) return;
+    seen[k] = true;
+    taxAttempts.push(t);
+  }
+  if (ids.taxId != null) pushTax(ids.taxId);
+  for (var i = 0; i < ids.taxCandidates.length; i++) pushTax(ids.taxCandidates[i]);
+  pushTax(null);
+
+  var lastErrText = "";
+  var lastStatus = 0;
+  for (var j = 0; j < taxAttempts.length; j++) {
+    var attemptTax = taxAttempts[j];
     var body: any = {
       amount: String(addAmt),
       unit_price: pos.price.toFixed(2),
       text: addTxt,
       account_id: ids.accountId,
     };
-    if (!noTax && ids.taxId) body.tax_id = ids.taxId;
+    if (attemptTax != null) body.tax_id = attemptTax;
 
-    console.log("[Bexio] Adding position to invoice", invoiceId, { force: force, noTax: noTax, taxId: noTax ? "(omitted)" : ids.taxId });
-    return await fetch("https://api.bexio.com/2.0/kb_invoice/" + invoiceId + "/kb_position_custom", {
+    console.log("[Bexio] Adding position to invoice", invoiceId, {
+      attempt: j + 1, of: taxAttempts.length,
+      taxId: attemptTax == null ? "(omitted)" : attemptTax,
+    });
+    var resp = await fetch("https://api.bexio.com/2.0/kb_invoice/" + invoiceId + "/kb_position_custom", {
       method: "POST",
       headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(body),
     });
-  }
-
-  var resp = await postOnce(false, false);
-  if (resp.status === 422) {
-    var errText0 = await resp.text();
-    if (isBexioIdValidationError(errText0)) {
-      console.warn("[Bexio] Add position 422 with id error — force-refreshing ids and retrying:", errText0.slice(0, 200));
-      resp = await postOnce(true, false);
-    } else {
-      throw new Error("Bexio Position (422): " + errText0.slice(0, 200));
+    if (resp.ok) {
+      if (attemptTax != null && attemptTax !== tenant.bexio_tax_id) {
+        await supabase.from("tenants").update({
+          bexio_tax_id: attemptTax, updated_at: new Date().toISOString(),
+        }).eq("id", tenant.id);
+        tenant.bexio_tax_id = attemptTax;
+      }
+      return resp.json();
     }
+    lastStatus = resp.status;
+    lastErrText = await resp.text();
+    console.warn("[Bexio] Add position attempt " + (j + 1) + " failed:", resp.status, lastErrText.slice(0, 200));
+    if (resp.status !== 422) break;
+    if (!/tax_id/i.test(lastErrText)) break;
   }
-  if (resp.status === 422) {
-    var errText1 = await resp.text();
-    if (/tax_id/i.test(errText1)) {
-      console.warn("[Bexio] Add position 422 still tax_id after refresh — retrying without tax_id:", errText1.slice(0, 200));
-      resp = await postOnce(false, true);
-    } else {
-      throw new Error("Bexio Position (422): " + errText1.slice(0, 200));
-    }
-  }
-  if (!resp.ok) {
-    var errText2 = await resp.text();
-    console.error("[Bexio] Add position error:", resp.status, errText2);
-    throw new Error("Bexio Position (" + resp.status + "): " + errText2.slice(0, 200));
-  }
-  return resp.json();
+  console.error("[Bexio] Add position error after", taxAttempts.length, "attempts:", lastStatus, lastErrText);
+  throw new Error("Bexio Position (" + lastStatus + "): " + lastErrText.slice(0, 200));
 }
 
 // ===== Position amount/unit parsing =====
