@@ -478,19 +478,45 @@ Deno.serve(async (req: Request) => {
       }
 
     } else if (step === "contact_new_address") {
-      if (tenant) {
+      if (choice === "enter_address") {
+        await supabase.from("sessions_handwerker").update({
+          step: "contact_new_address_input", updated_at: new Date().toISOString(),
+        }).eq("id", session.id);
+        await sendText(from, "Gib die Adresse ein im Format:\n*Strasse Nr, PLZ Ort*\n\nZ.B. Teststrasse 14, 8000 Zuerich");
+      } else if (choice === "skip_address" || text === "skip") {
+        if (tenant) {
+          var contactData = (session.contact_data || {}) as any;
+          var newContact = await bexioCreateContact(tenant, {
+            name: contactData.name || "Unbekannt", address: "", postcode: "", city: "",
+          });
+          await supabase.from("sessions_handwerker").update({
+            bexio_contact_id: newContact.id,
+            contact_data: { name: newContact.name_1 },
+            step: "invoice_title", updated_at: new Date().toISOString(),
+          }).eq("id", session.id);
+          await sendText(from, "Kontakt *" + newContact.name_1 + "* erstellt (ID: " + newContact.id + ")\n\nWie soll die Rechnung heissen? (Titel)");
+        }
+      } else {
+        await sendButtons(from, "Bitte waehle aus:", [
+          { id: "enter_address", title: "Ja, Adresse eingeben" },
+          { id: "skip_address", title: "Ueberspringen" },
+        ]);
+      }
+
+    } else if (step === "contact_new_address_input") {
+      if (!msgBody || msgBody.length < 2) {
+        await sendText(from, "Bitte gib die Adresse ein (Strasse Nr, PLZ Ort).");
+      } else if (tenant) {
         var contactData = (session.contact_data || {}) as any;
         var address = "";
         var postcode = "";
         var city = "";
-        if (choice !== "skip_address" && text !== "skip" && msgBody.length > 0) {
-          var parts = msgBody.split(",").map(function (s: string) { return s.trim(); });
-          address = parts[0] || "";
-          if (parts[1]) {
-            var plzMatch = parts[1].match(/^(\d{4})\s+(.+)/);
-            if (plzMatch) { postcode = plzMatch[1]; city = plzMatch[2]; }
-            else { city = parts[1]; }
-          }
+        var parts = msgBody.split(",").map(function (s: string) { return s.trim(); });
+        address = parts[0] || "";
+        if (parts[1]) {
+          var plzMatch = parts[1].match(/^(\d{4})\s+(.+)/);
+          if (plzMatch) { postcode = plzMatch[1]; city = plzMatch[2]; }
+          else { city = parts[1]; }
         }
         var newContact = await bexioCreateContact(tenant, {
           name: contactData.name || "Unbekannt", address: address, postcode: postcode, city: city,
