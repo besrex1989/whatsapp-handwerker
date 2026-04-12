@@ -623,12 +623,13 @@ Deno.serve(async (req: Request) => {
               title: session.invoice_title || "Rechnung",
               positions: session.manual_positions || [],
             });
-            try { await bexioIssueInvoice(tenant, invoice.id); } catch (_e) { /* draft ok */ }
+            // NICHT issuen — bleibt als Entwurf, damit spaeter Positionen ergaenzt werden koennen
             await sendText(from,
-              "*Rechnung erstellt!*\n\n" +
+              "*Entwurf erstellt!*\n\n" +
               "Rechnungs-Nr: " + invoice.document_nr + "\n" +
               "Total: CHF " + invoice.total + "\n\n" +
-              "Die Rechnung findest du in deinem Bexio-Konto."
+              "Die Rechnung ist als *Entwurf* in Bexio gespeichert.\n" +
+              "Du kannst spaeter weitere Positionen hinzufuegen ueber *Rechnung erstellen -> Entwurf bearbeiten*."
             );
             try { await sendEmailNotification(tenant.email, invoice.document_nr, invoice.total); } catch (_e) { /* ok */ }
           } catch (invErr) {
