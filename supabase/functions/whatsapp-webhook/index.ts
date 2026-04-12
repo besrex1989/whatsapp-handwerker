@@ -447,6 +447,16 @@ Deno.serve(async (req: Request) => {
         await sendText(from, "Beschreibe die nächste Position:");
       } else if (choice === "finish_draft" || text === "fertig" || text === "nein") {
         await sendText(from, "Fertig! Der Entwurf wurde aktualisiert. Du findest ihn in Bexio.");
+        // Send the updated PDF as a preview before closing the session.
+        if (tenant && session.bexio_invoice_id) {
+          var finishDocType: DocType = (session.bexio_document_type === "offer") ? "offer" : "invoice";
+          try {
+            var finishDoc = await bexioGetDocument(tenant, session.bexio_invoice_id, finishDocType);
+            await sendBexioPdfPreview(from, tenant, session.bexio_invoice_id, finishDocType, finishDoc.document_nr || "");
+          } catch (previewErr) {
+            console.error("[Draft Finish Preview] Error:", previewErr);
+          }
+        }
         await resetSession(session.id);
       } else {
         await sendButtons(from, "Was möchtest du tun?", [
@@ -751,6 +761,10 @@ Deno.serve(async (req: Request) => {
               docArticle + " " + confirmDocLabel + " ist als *Entwurf* in Bexio gespeichert.\n" +
               "Du kannst später weitere Positionen hinzufügen über *" + confirmDocLabel + " erstellen -> Entwurf bearbeiten*."
             );
+            // Send the rendered PDF so the user can visually verify the
+            // draft right in WhatsApp. Non-blocking best-effort — failures
+            // don't invalidate the draft that is already in Bexio.
+            await sendBexioPdfPreview(from, tenant, invoice.id, confirmDocType, invoice.document_nr);
             try { await sendEmailNotification(tenant.email, invoice.document_nr, invoice.total, confirmDocType); } catch (_e) { /* ok */ }
           } catch (invErr) {
             console.error(confirmDocLabel + " error:", invErr);
@@ -1411,6 +1425,83 @@ async function bexioIssueDocument(tenant: any, docId: number, docType: DocType):
     method: "POST",
     headers: { Authorization: "Bearer " + token, Accept: "application/json" },
   });
+}
+
+// Fetches the rendered PDF for an existing Bexio document (works for both
+// kb_invoice and kb_offer, draft or issued). Returns raw PDF bytes.
+async function bexioGetDocumentPdf(tenant: any, docId: number, docType: DocType): Promise<Uint8Array> {
+  var token = await getBexioToken(tenant);
+  var endpoint = docEndpoint(docType);
+  var label = docLabel(docType);
+  var resp = await fetch("https://api.bexio.com/2.0/" + endpoint + "/" + docId + "/pdf", {
+    headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+  });
+  if (!resp.ok) {
+    var errText = await resp.text();
+    throw new Error("Bexio " + label + " PDF (" + resp.status + "): " + errText.slice(0, 200));
+  }
+  var data = await resp.json();
+  // Bexio returns { name, mime, content } where content is base64-encoded PDF.
+  var b64 = data.content || "";
+  var bin = atob(b64);
+  var bytes = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+// Uploads bytes to the WhatsApp Media endpoint and returns the media_id.
+// The media_id is valid for ~30 days and can be reused to send a document.
+async function uploadWhatsAppMedia(bytes: Uint8Array, mimeType: string, filename: string): Promise<string> {
+  var form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("type", mimeType);
+  form.append("file", new Blob([bytes], { type: mimeType }), filename);
+  var resp = await fetch("https://graph.facebook.com/v21.0/" + PHONE_NUMBER_ID + "/media", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + WHATSAPP_TOKEN },
+    body: form,
+  });
+  if (!resp.ok) {
+    var errText = await resp.text();
+    throw new Error("WhatsApp media upload (" + resp.status + "): " + errText.slice(0, 200));
+  }
+  var data = await resp.json();
+  if (!data.id) throw new Error("WhatsApp media upload: no id in response");
+  return data.id;
+}
+
+// Sends a document message (PDF) to the user. The media must have been
+// uploaded to Meta's media endpoint first (see uploadWhatsAppMedia).
+async function sendDocumentMedia(to: string, mediaId: string, filename: string, caption?: string): Promise<void> {
+  var doc: any = { id: mediaId, filename: filename };
+  if (caption) doc.caption = caption;
+  await fetch(GRAPH_API, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + WHATSAPP_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ messaging_product: "whatsapp", to: to, type: "document", document: doc }),
+  });
+}
+
+// Convenience: fetch PDF from Bexio, upload to WhatsApp, send as document.
+// Swallows errors (logged + user is informed) because the preview is a
+// nice-to-have — the draft itself already exists in Bexio regardless.
+async function sendBexioPdfPreview(
+  from: string,
+  tenant: any,
+  docId: number,
+  docType: DocType,
+  docNr: string,
+): Promise<void> {
+  var label = docLabel(docType);
+  try {
+    var pdfBytes = await bexioGetDocumentPdf(tenant, docId, docType);
+    var filename = label + "-" + docNr + ".pdf";
+    var mediaId = await uploadWhatsAppMedia(pdfBytes, "application/pdf", filename);
+    await sendDocumentMedia(from, mediaId, filename, "Vorschau " + label + " " + docNr);
+  } catch (err) {
+    console.error("[PDF Preview] Error:", err);
+    await sendText(from, "Vorschau konnte nicht geladen werden: " + String(err).slice(0, 200));
+  }
 }
 
 async function bexioGetContact(tenant: any, contactId: number): Promise<any> {
