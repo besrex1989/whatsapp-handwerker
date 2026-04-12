@@ -1188,18 +1188,6 @@ async function bexioCreateInvoice(tenant: any, params: { contactId: number; titl
     }
   }
 
-  var taxAttempts: (number | null)[] = [];
-  var seen: Record<string, boolean> = {};
-  function pushTax(t: number | null) {
-    var k = t == null ? "null" : String(t);
-    if (seen[k]) return;
-    seen[k] = true;
-    taxAttempts.push(t);
-  }
-  if (ids.taxId != null) pushTax(ids.taxId);
-  for (var i = 0; i < ids.taxCandidates.length; i++) pushTax(ids.taxCandidates[i]);
-  pushTax(null); // final fallback: omit tax_id
-
   var today = new Date().toISOString().split("T")[0];
   var dueDate = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
 
@@ -1227,45 +1215,76 @@ async function bexioCreateInvoice(tenant: any, params: { contactId: number; titl
     };
   }
 
-  var lastErrText = "";
-  var lastStatus = 0;
-  for (var j = 0; j < taxAttempts.length; j++) {
-    var attemptTax = taxAttempts[j];
-    console.log("[Bexio] Creating invoice", {
-      attempt: j + 1, of: taxAttempts.length,
+  async function postWithTax(taxOverride: number | null, label: string): Promise<{ ok: boolean; body: any; status: number; errText: string }> {
+    console.log("[Bexio] Creating invoice (" + label + ")", {
       userId: ids.userId, accountId: ids.accountId,
-      taxId: attemptTax == null ? "(omitted)" : attemptTax,
+      taxId: taxOverride == null ? "(omitted)" : taxOverride,
     });
     var resp = await fetch("https://api.bexio.com/2.0/kb_invoice", {
       method: "POST",
       headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(buildBody(attemptTax)),
+      body: JSON.stringify(buildBody(taxOverride)),
     });
     if (resp.ok) {
-      // Cache the winning tax_id so future invoices skip straight to it.
-      if (attemptTax != null && attemptTax !== tenant.bexio_tax_id) {
-        await supabase.from("tenants").update({
-          bexio_tax_id: attemptTax, updated_at: new Date().toISOString(),
-        }).eq("id", tenant.id);
-        tenant.bexio_tax_id = attemptTax;
-      }
-      return resp.json();
+      return { ok: true, body: await resp.json(), status: resp.status, errText: "" };
     }
-    lastStatus = resp.status;
-    lastErrText = await resp.text();
-    console.warn("[Bexio] Invoice attempt " + (j + 1) + " failed:", resp.status, lastErrText.slice(0, 200));
-    // If the error is not about tax_id, no point trying other tax_ids —
-    // break out with the original error.
-    if (resp.status === 422 && !/tax_id/i.test(lastErrText)) {
-      break;
-    }
-    // If it's a 422 with a non-id field validation that's unrelated, also break.
-    if (resp.status !== 422) {
-      break;
+    var errText = await resp.text();
+    console.warn("[Bexio] Invoice attempt (" + label + ") failed:", resp.status, errText.slice(0, 200));
+    return { ok: false, body: null, status: resp.status, errText: errText };
+  }
+
+  async function persistWinningTax(tx: number | null) {
+    if (tx != null && tx !== tenant.bexio_tax_id) {
+      await supabase.from("tenants").update({
+        bexio_tax_id: tx, updated_at: new Date().toISOString(),
+      }).eq("id", tenant.id);
+      tenant.bexio_tax_id = tx;
     }
   }
-  console.error("[Bexio] Invoice create error after", taxAttempts.length, "attempts:", lastStatus, lastErrText);
-  throw new Error("Bexio Rechnung (" + lastStatus + "): " + lastErrText.slice(0, 300));
+
+  // 1) First try the cached tax_id if we have one.
+  var first: any = null;
+  if (ids.taxId != null) {
+    first = await postWithTax(ids.taxId, "cached tax " + ids.taxId);
+    if (first.ok) { await persistWinningTax(ids.taxId); return first.body; }
+    // If failure is not a tax_id validation, don't bother iterating.
+    if (first.status !== 422 || !/tax_id/i.test(first.errText)) {
+      throw new Error("Bexio Rechnung (" + first.status + "): " + first.errText.slice(0, 300));
+    }
+  }
+
+  // 2) Force-refresh ids so we actually get the candidate list populated.
+  console.log("[Bexio] Cached tax_id rejected or missing — force-refreshing tax list.");
+  ids = await ensureBexioIds(tenant, token, true);
+
+  // 3) Iterate through the prioritized candidate list.
+  var tried: Record<string, boolean> = {};
+  if (ids.taxId != null && first != null) tried[String(ids.taxId)] = true; // already tried above if same
+  var candidates = (ids.taxCandidates || []).filter(function (c) {
+    if (tried[String(c)]) return false;
+    tried[String(c)] = true;
+    return true;
+  });
+  console.log("[Bexio] Will try tax candidates in order:", JSON.stringify(candidates));
+
+  var lastErrText = first ? first.errText : "";
+  var lastStatus = first ? first.status : 0;
+  for (var j = 0; j < candidates.length; j++) {
+    var tx = candidates[j];
+    var r = await postWithTax(tx, "candidate " + (j + 1) + "/" + candidates.length + " id=" + tx);
+    if (r.ok) { await persistWinningTax(tx); return r.body; }
+    lastStatus = r.status; lastErrText = r.errText;
+    // Non-tax_id error: stop, nothing we can fix by swapping tax_id.
+    if (r.status !== 422 || !/tax_id/i.test(r.errText)) break;
+  }
+
+  // 4) Final fallback: omit tax_id entirely.
+  console.log("[Bexio] All tax candidates exhausted — final attempt without tax_id.");
+  var noTax = await postWithTax(null, "no tax_id");
+  if (noTax.ok) return noTax.body;
+
+  console.error("[Bexio] Invoice create error after all attempts:", noTax.status, noTax.errText);
+  throw new Error("Bexio Rechnung (" + noTax.status + "): " + noTax.errText.slice(0, 300));
 }
 
 async function bexioIssueInvoice(tenant: any, invoiceId: number): Promise<void> {
@@ -1341,56 +1360,81 @@ async function bexioAddInvoicePosition(
     }
   }
 
-  var taxAttempts: (number | null)[] = [];
-  var seen: Record<string, boolean> = {};
-  function pushTax(t: number | null) {
-    var k = t == null ? "null" : String(t);
-    if (seen[k]) return;
-    seen[k] = true;
-    taxAttempts.push(t);
-  }
-  if (ids.taxId != null) pushTax(ids.taxId);
-  for (var i = 0; i < ids.taxCandidates.length; i++) pushTax(ids.taxCandidates[i]);
-  pushTax(null);
-
-  var lastErrText = "";
-  var lastStatus = 0;
-  for (var j = 0; j < taxAttempts.length; j++) {
-    var attemptTax = taxAttempts[j];
+  function buildPosBody(taxOverride: number | null): any {
     var body: any = {
       amount: String(addAmt),
       unit_price: pos.price.toFixed(2),
       text: addTxt,
       account_id: ids.accountId,
     };
-    if (attemptTax != null) body.tax_id = attemptTax;
+    if (taxOverride != null) body.tax_id = taxOverride;
+    return body;
+  }
 
-    console.log("[Bexio] Adding position to invoice", invoiceId, {
-      attempt: j + 1, of: taxAttempts.length,
-      taxId: attemptTax == null ? "(omitted)" : attemptTax,
+  async function postPos(taxOverride: number | null, label: string) {
+    console.log("[Bexio] Adding position to invoice", invoiceId, "(" + label + ")", {
+      taxId: taxOverride == null ? "(omitted)" : taxOverride,
     });
     var resp = await fetch("https://api.bexio.com/2.0/kb_invoice/" + invoiceId + "/kb_position_custom", {
       method: "POST",
       headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(buildPosBody(taxOverride)),
     });
-    if (resp.ok) {
-      if (attemptTax != null && attemptTax !== tenant.bexio_tax_id) {
-        await supabase.from("tenants").update({
-          bexio_tax_id: attemptTax, updated_at: new Date().toISOString(),
-        }).eq("id", tenant.id);
-        tenant.bexio_tax_id = attemptTax;
-      }
-      return resp.json();
-    }
-    lastStatus = resp.status;
-    lastErrText = await resp.text();
-    console.warn("[Bexio] Add position attempt " + (j + 1) + " failed:", resp.status, lastErrText.slice(0, 200));
-    if (resp.status !== 422) break;
-    if (!/tax_id/i.test(lastErrText)) break;
+    if (resp.ok) return { ok: true, body: await resp.json(), status: resp.status, errText: "" };
+    var errText = await resp.text();
+    console.warn("[Bexio] Add position (" + label + ") failed:", resp.status, errText.slice(0, 200));
+    return { ok: false, body: null, status: resp.status, errText: errText };
   }
-  console.error("[Bexio] Add position error after", taxAttempts.length, "attempts:", lastStatus, lastErrText);
-  throw new Error("Bexio Position (" + lastStatus + "): " + lastErrText.slice(0, 200));
+
+  async function persistWinningTax(tx: number | null) {
+    if (tx != null && tx !== tenant.bexio_tax_id) {
+      await supabase.from("tenants").update({
+        bexio_tax_id: tx, updated_at: new Date().toISOString(),
+      }).eq("id", tenant.id);
+      tenant.bexio_tax_id = tx;
+    }
+  }
+
+  // 1) Try cached tax_id.
+  var first: any = null;
+  if (ids.taxId != null) {
+    first = await postPos(ids.taxId, "cached tax " + ids.taxId);
+    if (first.ok) { await persistWinningTax(ids.taxId); return first.body; }
+    if (first.status !== 422 || !/tax_id/i.test(first.errText)) {
+      throw new Error("Bexio Position (" + first.status + "): " + first.errText.slice(0, 200));
+    }
+  }
+
+  // 2) Force-refresh to get full candidate list.
+  console.log("[Bexio] Cached tax_id rejected or missing — force-refreshing tax list.");
+  ids = await ensureBexioIds(tenant, token, true);
+
+  var tried: Record<string, boolean> = {};
+  if (ids.taxId != null && first != null) tried[String(ids.taxId)] = true;
+  var candidates = (ids.taxCandidates || []).filter(function (c) {
+    if (tried[String(c)]) return false;
+    tried[String(c)] = true;
+    return true;
+  });
+  console.log("[Bexio] Will try tax candidates in order:", JSON.stringify(candidates));
+
+  var lastErrText = first ? first.errText : "";
+  var lastStatus = first ? first.status : 0;
+  for (var j = 0; j < candidates.length; j++) {
+    var tx = candidates[j];
+    var r = await postPos(tx, "candidate " + (j + 1) + "/" + candidates.length + " id=" + tx);
+    if (r.ok) { await persistWinningTax(tx); return r.body; }
+    lastStatus = r.status; lastErrText = r.errText;
+    if (r.status !== 422 || !/tax_id/i.test(r.errText)) break;
+  }
+
+  // 3) Final fallback: no tax_id.
+  console.log("[Bexio] All tax candidates exhausted — final attempt without tax_id.");
+  var noTax = await postPos(null, "no tax_id");
+  if (noTax.ok) return noTax.body;
+
+  console.error("[Bexio] Add position error after all attempts:", noTax.status, noTax.errText);
+  throw new Error("Bexio Position (" + noTax.status + "): " + noTax.errText.slice(0, 200));
 }
 
 // ===== Position amount/unit parsing =====
