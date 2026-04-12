@@ -485,16 +485,21 @@ Deno.serve(async (req: Request) => {
         await sendText(from, "Gib die Adresse ein im Format:\n*Strasse Nr, PLZ Ort*\n\nZ.B. Teststrasse 14, 8000 Zuerich");
       } else if (choice === "skip_address" || text === "skip") {
         if (tenant) {
-          var contactData = (session.contact_data || {}) as any;
-          var newContact = await bexioCreateContact(tenant, {
-            name: contactData.name || "Unbekannt", address: "", postcode: "", city: "",
-          });
-          await supabase.from("sessions_handwerker").update({
-            bexio_contact_id: newContact.id,
-            contact_data: { name: newContact.name_1 },
-            step: "invoice_title", updated_at: new Date().toISOString(),
-          }).eq("id", session.id);
-          await sendText(from, "Kontakt *" + newContact.name_1 + "* erstellt (ID: " + newContact.id + ")\n\nWie soll die Rechnung heissen? (Titel)");
+          try {
+            var contactData = (session.contact_data || {}) as any;
+            var newContact = await bexioCreateContact(tenant, {
+              name: contactData.name || "Unbekannt", address: "", postcode: "", city: "",
+            });
+            await supabase.from("sessions_handwerker").update({
+              bexio_contact_id: newContact.id,
+              contact_data: { name: newContact.name_1 },
+              step: "invoice_title", updated_at: new Date().toISOString(),
+            }).eq("id", session.id);
+            await sendText(from, "Kontakt *" + newContact.name_1 + "* erstellt (ID: " + newContact.id + ")\n\nWie soll die Rechnung heissen? (Titel)");
+          } catch (err: any) {
+            console.error("[Contact create] Error:", err);
+            await sendText(from, "Fehler beim Erstellen des Kontakts:\n" + (err?.message || String(err)));
+          }
         }
       } else {
         await sendButtons(from, "Bitte waehle aus:", [
@@ -507,26 +512,31 @@ Deno.serve(async (req: Request) => {
       if (!msgBody || msgBody.length < 2) {
         await sendText(from, "Bitte gib die Adresse ein (Strasse Nr, PLZ Ort).");
       } else if (tenant) {
-        var contactData = (session.contact_data || {}) as any;
-        var address = "";
-        var postcode = "";
-        var city = "";
-        var parts = msgBody.split(",").map(function (s: string) { return s.trim(); });
-        address = parts[0] || "";
-        if (parts[1]) {
-          var plzMatch = parts[1].match(/^(\d{4})\s+(.+)/);
-          if (plzMatch) { postcode = plzMatch[1]; city = plzMatch[2]; }
-          else { city = parts[1]; }
+        try {
+          var contactData = (session.contact_data || {}) as any;
+          var address = "";
+          var postcode = "";
+          var city = "";
+          var parts = msgBody.split(",").map(function (s: string) { return s.trim(); });
+          address = parts[0] || "";
+          if (parts[1]) {
+            var plzMatch = parts[1].match(/^(\d{4})\s+(.+)/);
+            if (plzMatch) { postcode = plzMatch[1]; city = plzMatch[2]; }
+            else { city = parts[1]; }
+          }
+          var newContact = await bexioCreateContact(tenant, {
+            name: contactData.name || "Unbekannt", address: address, postcode: postcode, city: city,
+          });
+          await supabase.from("sessions_handwerker").update({
+            bexio_contact_id: newContact.id,
+            contact_data: { name: newContact.name_1, city: newContact.city || city },
+            step: "invoice_title", updated_at: new Date().toISOString(),
+          }).eq("id", session.id);
+          await sendText(from, "Kontakt *" + newContact.name_1 + "* erstellt (ID: " + newContact.id + ")\n\nWie soll die Rechnung heissen? (Titel)");
+        } catch (err: any) {
+          console.error("[Contact create] Error:", err);
+          await sendText(from, "Fehler beim Erstellen des Kontakts:\n" + (err?.message || String(err)));
         }
-        var newContact = await bexioCreateContact(tenant, {
-          name: contactData.name || "Unbekannt", address: address, postcode: postcode, city: city,
-        });
-        await supabase.from("sessions_handwerker").update({
-          bexio_contact_id: newContact.id,
-          contact_data: { name: newContact.name_1, city: newContact.city || city },
-          step: "invoice_title", updated_at: new Date().toISOString(),
-        }).eq("id", session.id);
-        await sendText(from, "Kontakt *" + newContact.name_1 + "* erstellt (ID: " + newContact.id + ")\n\nWie soll die Rechnung heissen? (Titel)");
       }
 
     } else if (step === "invoice_title") {
@@ -830,14 +840,50 @@ async function bexioSearchContacts(tenant: any, term: string): Promise<any[]> {
 
 async function bexioCreateContact(tenant: any, c: { name: string; address: string; postcode: string; city: string }): Promise<any> {
   var token = await getBexioToken(tenant);
+
+  // Auto-fetch user_id if missing (required as owner_id)
+  var userId = tenant.bexio_user_id;
+  if (!userId) {
+    console.log("[Bexio] Fetching user_id for contact creation...");
+    var userResp = await fetch("https://api.bexio.com/3.0/users/me", {
+      headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+    });
+    if (userResp.ok) {
+      var userData = await userResp.json();
+      userId = userData.id;
+      await supabase.from("tenants").update({ bexio_user_id: userId }).eq("id", tenant.id);
+      console.log("[Bexio] Got user_id:", userId);
+    } else {
+      var userErr = await userResp.text();
+      console.error("[Bexio] Failed to fetch user_id:", userErr);
+    }
+  }
+
+  var payload: any = {
+    contact_type_id: 1,
+    name_1: c.name,
+    address: c.address,
+    postcode: c.postcode,
+    city: c.city,
+  };
+  if (userId) payload.owner_id = userId;
+
+  console.log("[Bexio] Creating contact:", JSON.stringify(payload));
   var resp = await fetch("https://api.bexio.com/2.0/contact", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contact_type_id: 1, name_1: c.name, address: c.address, postcode: c.postcode, city: c.city, owner_id: tenant.bexio_user_id,
-    }),
+    body: JSON.stringify(payload),
   });
-  return resp.json();
+
+  if (!resp.ok) {
+    var errText = await resp.text();
+    console.error("[Bexio] Create contact failed (" + resp.status + "):", errText);
+    throw new Error("Bexio Kontakt-Erstellung fehlgeschlagen: " + errText);
+  }
+
+  var data = await resp.json();
+  console.log("[Bexio] Contact created:", data.id, data.name_1);
+  return data;
 }
 
 async function bexioCreateInvoice(tenant: any, params: { contactId: number; title: string; positions: any[] }): Promise<any> {
