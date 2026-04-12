@@ -854,9 +854,10 @@ async function bexioCreateContact(tenant: any, c: { name: string; address: strin
     throw new Error("Bexio user_id konnte nicht ermittelt werden. Bitte Bexio neu verbinden.");
   }
 
-  // Bexio deprecated the monolithic "address" field in June 2025 and now
-  // uses structured fields: street_name, house_number, zip_code, city.
-  // We split e.g. "Teststrasse 14" into street_name + house_number.
+  // Bexio POST /2.0/contact schema accepts: name_1, contact_type_id,
+  // user_id (required), owner_id, postcode, city, plus the structured
+  // street fields (street_name + house_number). It does NOT accept
+  // 'address' (legacy) nor 'zip_code'.
   var payload: any = {
     contact_type_id: 1,
     name_1: c.name,
@@ -872,7 +873,7 @@ async function bexioCreateContact(tenant: any, c: { name: string; address: strin
       payload.street_name = c.address;
     }
   }
-  if (c.postcode) payload.zip_code = c.postcode;
+  if (c.postcode) payload.postcode = c.postcode;
   if (c.city) payload.city = c.city;
 
   console.log("[Bexio] Creating contact:", JSON.stringify(payload));
