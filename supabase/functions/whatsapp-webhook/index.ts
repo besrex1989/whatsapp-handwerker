@@ -147,7 +147,6 @@ Deno.serve(async (req: Request) => {
       await sendText(from,
         "*Verfuegbare Befehle:*\n\n" +
         "rechnung - Neue Rechnung erstellen\n" +
-        "beleg - Beleg/Quittung erfassen\n" +
         "suche - Kontakt suchen\n" +
         "neustart - Session zuruecksetzen\n" +
         "hilfe - Diese Hilfe anzeigen"
@@ -163,30 +162,22 @@ Deno.serve(async (req: Request) => {
       await updateStep(session.id, "main_menu");
       await sendButtons(from, "Hallo! Was moechtest du tun?", [
         { id: "invoice", title: "Rechnung erstellen" },
-        { id: "receipt", title: "Beleg erfassen" },
         { id: "search", title: "Kontakt suchen" },
       ]);
 
     } else if (step === "main_menu") {
-      if (mediaId) {
-        await updateStep(session.id, "receipt_upload");
-        await handleReceiptUpload(from, session, tenant, mediaId, mediaMime);
-      } else if (choice === "invoice" || choice === "1" || text.includes("rechnung")) {
+      if (choice === "invoice" || choice === "1" || text.includes("rechnung")) {
         await updateStep(session.id, "invoice_choice");
         await sendButtons(from, "Was moechtest du tun?", [
           { id: "new_invoice", title: "Neue Rechnung" },
           { id: "edit_draft", title: "Entwurf bearbeiten" },
         ]);
-      } else if (choice === "receipt" || choice === "2" || text.includes("beleg")) {
-        await updateStep(session.id, "receipt_upload");
-        await sendText(from, "Beleg erfassen\n\nSende mir ein Foto des Belegs.");
-      } else if (choice === "search" || choice === "3" || text.includes("suche")) {
+      } else if (choice === "search" || choice === "2" || text.includes("suche")) {
         await updateStep(session.id, "contact_search");
         await sendText(from, "Gib den Suchbegriff ein:");
       } else {
         await sendButtons(from, "Bitte waehle eine Option:", [
           { id: "invoice", title: "Rechnung erstellen" },
-          { id: "receipt", title: "Beleg erfassen" },
           { id: "search", title: "Kontakt suchen" },
         ]);
       }
@@ -672,7 +663,6 @@ Deno.serve(async (req: Request) => {
       await updateStep(session.id, "main_menu");
       await sendButtons(from, "Bitte waehle:", [
         { id: "invoice", title: "Rechnung erstellen" },
-        { id: "receipt", title: "Beleg erfassen" },
         { id: "search", title: "Kontakt suchen" },
       ]);
     }
