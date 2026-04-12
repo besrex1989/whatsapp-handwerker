@@ -355,11 +355,38 @@ Deno.serve(async (req: Request) => {
             invoice_data: { document_nr: selectedDraft.document_nr, total: selectedDraft.total },
             step: "draft_position_desc", updated_at: new Date().toISOString(),
           }).eq("id", session.id);
+          // Fetch the full document so we can list existing positions.
+          // The search result only contains header fields — positions live
+          // on the detail endpoint.
+          var existingPositionsText = "";
+          try {
+            var fullDraft = await bexioGetDocument(tenant, draftId, selectDocType);
+            var draftPositions = Array.isArray(fullDraft.positions) ? fullDraft.positions : [];
+            if (draftPositions.length > 0) {
+              existingPositionsText = "\n*Erfasste Positionen:*\n";
+              draftPositions.forEach(function (p: any, i: number) {
+                var amt = parseFloat(p.amount || "1");
+                if (isNaN(amt) || amt <= 0) amt = 1;
+                var unitPrice = parseFloat(p.unit_price || "0");
+                if (isNaN(unitPrice)) unitPrice = 0;
+                var lineTotal = parseFloat(p.position_total || String(amt * unitPrice));
+                if (isNaN(lineTotal)) lineTotal = amt * unitPrice;
+                var unitSuffix = p.unit_name ? (" " + p.unit_name) : "";
+                existingPositionsText += (i + 1) + ". " + (p.text || "") +
+                  " (" + amt + unitSuffix + " a CHF " + unitPrice.toFixed(2) + ")" +
+                  " - CHF " + lineTotal.toFixed(2) + "\n";
+              });
+              existingPositionsText += "\n";
+            }
+          } catch (posErr) {
+            console.error("[Draft Open] Could not fetch positions:", posErr);
+          }
           await sendText(from,
             "*Entwurf geöffnet*\n\n" +
             "Nr: " + (selectedDraft.document_nr || "-") + "\n" +
             "Titel: " + (selectedDraft.title || "-") + "\n" +
-            "Aktuelles Total: CHF " + (selectedDraft.total || "0") + "\n\n" +
+            "Aktuelles Total: CHF " + (selectedDraft.total || "0") + "\n" +
+            existingPositionsText + "\n" +
             "Beschreibe die neue Position:"
           );
         } else {
