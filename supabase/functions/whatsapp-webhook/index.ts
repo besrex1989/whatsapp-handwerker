@@ -871,7 +871,11 @@ async function bexioCreateContact(tenant: any, c: { name: string; address: strin
   console.log("[Bexio] Creating contact:", JSON.stringify(payload));
   var resp = await fetch("https://api.bexio.com/2.0/contact", {
     method: "POST",
-    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    headers: {
+      Authorization: "Bearer " + token,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
     body: JSON.stringify(payload),
   });
 
@@ -986,7 +990,8 @@ async function bexioCreateInvoice(tenant: any, params: { contactId: number; titl
 async function bexioIssueInvoice(tenant: any, invoiceId: number): Promise<void> {
   var token = await getBexioToken(tenant);
   await fetch("https://api.bexio.com/2.0/kb_invoice/" + invoiceId + "/issue", {
-    method: "POST", headers: { Authorization: "Bearer " + token },
+    method: "POST",
+    headers: { Authorization: "Bearer " + token, Accept: "application/json" },
   });
 }
 
