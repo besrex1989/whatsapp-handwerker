@@ -998,14 +998,15 @@ async function bexioCreateContact(tenant: any, c: { name: string; address: strin
   return data;
 }
 
-async function bexioCreateInvoice(tenant: any, params: { contactId: number; title: string; positions: any[] }): Promise<any> {
-  var token = await getBexioToken(tenant);
-
-  // Auto-fetch missing Bexio config (user_id, account_id, tax_id)
-  var userId = tenant.bexio_user_id;
-  var accountId = tenant.bexio_account_id;
-  var taxId = tenant.bexio_tax_id;
-  var needsUpdate = false;
+// Fetch-or-use-cached Bexio per-tenant ids (user_id, account_id, tax_id).
+// Force=true ignores the cached values and always pulls fresh from Bexio.
+async function ensureBexioIds(
+  tenant: any, token: string, force: boolean,
+): Promise<{ userId: number | null; accountId: number | null; taxId: number | null }> {
+  var userId = force ? null : tenant.bexio_user_id;
+  var accountId = force ? null : tenant.bexio_account_id;
+  var taxId = force ? null : tenant.bexio_tax_id;
+  var updated = false;
 
   if (!userId) {
     console.log("[Bexio] Fetching user_id...");
@@ -1015,11 +1016,9 @@ async function bexioCreateInvoice(tenant: any, params: { contactId: number; titl
     if (userResp.ok) {
       var userData = await userResp.json();
       userId = userData.id;
-      needsUpdate = true;
-      console.log("[Bexio] Got user_id:", userId);
+      updated = true;
     }
   }
-
   if (!accountId) {
     console.log("[Bexio] Fetching accounts...");
     var accResp = await fetch("https://api.bexio.com/2.0/accounts", {
@@ -1027,18 +1026,12 @@ async function bexioCreateInvoice(tenant: any, params: { contactId: number; titl
     });
     if (accResp.ok) {
       var accounts = await accResp.json();
-      // Find a revenue account (Ertragskonto) - typically starts with "3" in Swiss accounting
-      var revenueAccount = Array.isArray(accounts)
+      var revAcc = Array.isArray(accounts)
         ? accounts.find(function (a: any) { return a.account_no && String(a.account_no).startsWith("3"); })
         : null;
-      if (revenueAccount) {
-        accountId = revenueAccount.id;
-        needsUpdate = true;
-        console.log("[Bexio] Got account_id:", accountId);
-      }
+      if (revAcc) { accountId = revAcc.id; updated = true; }
     }
   }
-
   if (!taxId) {
     console.log("[Bexio] Fetching taxes...");
     var taxResp = await fetch("https://api.bexio.com/3.0/taxes", {
@@ -1046,58 +1039,82 @@ async function bexioCreateInvoice(tenant: any, params: { contactId: number; titl
     });
     if (taxResp.ok) {
       var taxes = await taxResp.json();
-      // Find standard sales tax (8.1% or highest active sales tax)
-      var salesTax = Array.isArray(taxes)
+      var sales = Array.isArray(taxes)
         ? taxes.find(function (t: any) { return t.type === "sales_tax" && t.is_active; })
         : null;
-      if (salesTax) {
-        taxId = salesTax.id;
-        needsUpdate = true;
-        console.log("[Bexio] Got tax_id:", taxId);
-      }
+      if (sales) { taxId = sales.id; updated = true; }
     }
   }
-
-  // Save fetched IDs to tenant
-  if (needsUpdate) {
+  if (updated) {
     await supabase.from("tenants").update({
       bexio_user_id: userId, bexio_account_id: accountId, bexio_tax_id: taxId,
+      updated_at: new Date().toISOString(),
     }).eq("id", tenant.id);
+    // Keep the in-memory tenant object in sync in case the caller uses it again.
+    tenant.bexio_user_id = userId;
+    tenant.bexio_account_id = accountId;
+    tenant.bexio_tax_id = taxId;
+  }
+  return { userId: userId, accountId: accountId, taxId: taxId };
+}
+
+// Detect "stale cached id" errors in a Bexio 422 body.
+function isBexioIdValidationError(errText: string): boolean {
+  var t = String(errText || "").toLowerCase();
+  return t.indexOf("tax_id") >= 0
+    || t.indexOf("account_id") >= 0
+    || t.indexOf("user_id") >= 0;
+}
+
+async function bexioCreateInvoice(tenant: any, params: { contactId: number; title: string; positions: any[] }): Promise<any> {
+  var token = await getBexioToken(tenant);
+
+  async function postOnce(force: boolean): Promise<Response> {
+    var ids = await ensureBexioIds(tenant, token, force);
+    if (!ids.userId || !ids.accountId) {
+      throw new Error("Bexio-Konfiguration unvollstaendig (user_id=" + ids.userId + ", account_id=" + ids.accountId + ", tax_id=" + ids.taxId + ")");
+    }
+    var today = new Date().toISOString().split("T")[0];
+    var dueDate = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
+    var positionItems = params.positions.map(function (p: any) {
+      var amt = typeof p.amount === "number" ? p.amount : parseFloat(p.amount || "1");
+      if (isNaN(amt) || amt <= 0) amt = 1;
+      // Embed the unit in the position text so it appears on the printed
+      // invoice. (Proper unit_id lookup via Bexio /2.0/unit could come later;
+      // for now the unit shows in the description column, which is visible
+      // to the customer and unambiguous.)
+      var txt = p.description || "";
+      if (p.unit) txt = txt + " (" + p.unit + ")";
+      var pos: any = {
+        type: "KbPositionCustom",
+        text: txt,
+        unit_price: (p.price || 0).toFixed(2),
+        amount: String(amt),
+        account_id: ids.accountId,
+      };
+      if (ids.taxId) pos.tax_id = ids.taxId;
+      return pos;
+    });
+    return await fetch("https://api.bexio.com/2.0/kb_invoice", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        title: params.title, contact_id: params.contactId, user_id: ids.userId,
+        is_valid_from: today, is_valid_to: dueDate, mwst_type: 0, mwst_is_net: true, positions: positionItems,
+      }),
+    });
   }
 
-  if (!userId || !accountId) {
-    throw new Error("Bexio-Konfiguration unvollstaendig (user_id=" + userId + ", account_id=" + accountId + ", tax_id=" + taxId + ")");
+  var resp = await postOnce(false);
+  if (resp.status === 422) {
+    var errText0 = await resp.text();
+    if (isBexioIdValidationError(errText0)) {
+      console.warn("[Bexio] Invoice create 422 with id error — clearing cached ids and retrying:", errText0.slice(0, 200));
+      resp = await postOnce(true);
+    } else {
+      throw new Error("Bexio Rechnung (422): " + errText0.slice(0, 300));
+    }
   }
-
-  var today = new Date().toISOString().split("T")[0];
-  var dueDate = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
-  var positionItems = params.positions.map(function (p: any) {
-    var amt = typeof p.amount === "number" ? p.amount : parseFloat(p.amount || "1");
-    if (isNaN(amt) || amt <= 0) amt = 1;
-    // Embed the unit in the position text so it appears on the printed
-    // invoice. (Proper unit_id lookup via Bexio /2.0/unit could come later;
-    // for now the unit shows in the description column, which is visible
-    // to the customer and unambiguous.)
-    var txt = p.description || "";
-    if (p.unit) txt = txt + " (" + p.unit + ")";
-    var pos: any = {
-      type: "KbPositionCustom",
-      text: txt,
-      unit_price: (p.price || 0).toFixed(2),
-      amount: String(amt),
-      account_id: accountId,
-    };
-    if (taxId) pos.tax_id = taxId;
-    return pos;
-  });
-  var resp = await fetch("https://api.bexio.com/2.0/kb_invoice", {
-    method: "POST",
-    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({
-      title: params.title, contact_id: params.contactId, user_id: userId,
-      is_valid_from: today, is_valid_to: dueDate, mwst_type: 0, mwst_is_net: true, positions: positionItems,
-    }),
-  });
   if (!resp.ok) {
     var errText = await resp.text();
     console.error("[Bexio] Invoice create error:", resp.status, errText);
@@ -1166,59 +1183,42 @@ async function bexioAddInvoicePosition(
 ): Promise<any> {
   var token = await getBexioToken(tenant);
 
-  // Ensure account_id and tax_id are available
-  var accountId = tenant.bexio_account_id;
-  var taxId = tenant.bexio_tax_id;
-  var needsUpd = false;
-
-  if (!accountId) {
-    var accResp = await fetch("https://api.bexio.com/2.0/accounts", {
-      headers: { Authorization: "Bearer " + token, Accept: "application/json" },
-    });
-    if (accResp.ok) {
-      var accs = await accResp.json();
-      var revAcc = Array.isArray(accs) ? accs.find(function (a: any) { return a.account_no && String(a.account_no).startsWith("3"); }) : null;
-      if (revAcc) { accountId = revAcc.id; needsUpd = true; }
-    }
-  }
-  if (!taxId) {
-    var taxResp2 = await fetch("https://api.bexio.com/3.0/taxes", {
-      headers: { Authorization: "Bearer " + token, Accept: "application/json" },
-    });
-    if (taxResp2.ok) {
-      var taxes2 = await taxResp2.json();
-      var stax = Array.isArray(taxes2) ? taxes2.find(function (t: any) { return t.type === "sales_tax" && t.is_active; }) : null;
-      if (stax) { taxId = stax.id; needsUpd = true; }
-    }
-  }
-  if (needsUpd) {
-    await supabase.from("tenants").update({
-      bexio_account_id: accountId, bexio_tax_id: taxId,
-    }).eq("id", tenant.id);
-  }
-
-  if (!accountId) {
-    throw new Error("Kein Ertragskonto gefunden. Bitte pruefe deine Bexio-Konfiguration.");
-  }
-
   var addAmt = typeof pos.amount === "number" ? pos.amount : parseFloat(String(pos.amount || "1"));
   if (isNaN(addAmt) || addAmt <= 0) addAmt = 1;
   var addTxt = pos.description || "";
   if (pos.unit) addTxt = addTxt + " (" + pos.unit + ")";
-  var body: any = {
-    amount: String(addAmt),
-    unit_price: pos.price.toFixed(2),
-    text: addTxt,
-    account_id: accountId,
-  };
-  if (taxId) body.tax_id = taxId;
 
-  console.log("[Bexio] Adding position to invoice", invoiceId);
-  var resp = await fetch("https://api.bexio.com/2.0/kb_invoice/" + invoiceId + "/kb_position_custom", {
-    method: "POST",
-    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(body),
-  });
+  async function postOnce(force: boolean): Promise<Response> {
+    var ids = await ensureBexioIds(tenant, token, force);
+    if (!ids.accountId) {
+      throw new Error("Kein Ertragskonto gefunden. Bitte pruefe deine Bexio-Konfiguration.");
+    }
+    var body: any = {
+      amount: String(addAmt),
+      unit_price: pos.price.toFixed(2),
+      text: addTxt,
+      account_id: ids.accountId,
+    };
+    if (ids.taxId) body.tax_id = ids.taxId;
+
+    console.log("[Bexio] Adding position to invoice", invoiceId, force ? "(retry, force-refresh)" : "");
+    return await fetch("https://api.bexio.com/2.0/kb_invoice/" + invoiceId + "/kb_position_custom", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  var resp = await postOnce(false);
+  if (resp.status === 422) {
+    var errText0 = await resp.text();
+    if (isBexioIdValidationError(errText0)) {
+      console.warn("[Bexio] Add position 422 with id error — clearing cached ids and retrying:", errText0.slice(0, 200));
+      resp = await postOnce(true);
+    } else {
+      throw new Error("Bexio Position (422): " + errText0.slice(0, 200));
+    }
+  }
   if (!resp.ok) {
     var errText2 = await resp.text();
     console.error("[Bexio] Add position error:", resp.status, errText2);

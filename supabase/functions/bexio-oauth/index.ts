@@ -70,6 +70,12 @@ serve(async (req) => {
           bexio_access_token: tokens.access_token,
           bexio_refresh_token: tokens.refresh_token,
           bexio_expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+          // Clear any previously cached per-instance IDs — they may belong to
+          // a different Bexio company if the user just reconnected. The
+          // whatsapp-webhook auto-fetches them on the first invoice attempt.
+          bexio_user_id: null,
+          bexio_account_id: null,
+          bexio_tax_id: null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", state);
