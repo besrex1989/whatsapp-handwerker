@@ -1,4 +1,5 @@
 // WhatsApp Handwerker Bot — Meta Cloud API + Bexio + Claude AI
+// Deployed via GitHub Actions
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 var supabase = createClient(
