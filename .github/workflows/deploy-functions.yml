@@ -1,12 +1,14 @@
 name: Deploy Edge Functions to Supabase
 
 on:
+  workflow_dispatch: {}
   push:
     branches:
       - claude/review-and-test-ni1MX
       - main
     paths:
       - 'supabase/functions/**'
+      - '.github/workflows/deploy-functions.yml'
 
 jobs:
   deploy:
