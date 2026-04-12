@@ -27,7 +27,7 @@ async function loadDashboard() {
   // Greeting
   var greetingEl = document.getElementById("greeting");
   if (greetingEl) {
-    greetingEl.textContent = "Hallo, " + (tenant.full_name || "Handwerker") + "!";
+    greetingEl.textContent = "Hallo" + (tenant.full_name ? ", " + tenant.full_name : "") + "!";
   }
 
   // Plan
