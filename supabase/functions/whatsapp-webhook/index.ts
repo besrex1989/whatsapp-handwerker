@@ -201,39 +201,104 @@ Deno.serve(async (req: Request) => {
         if (!tenant || !tenant.bexio_access_token) {
           await sendText(from, "Bexio ist noch nicht verbunden. Bitte verbinde zuerst dein Bexio-Konto.");
         } else {
-          try {
-            var drafts = await bexioListDraftInvoices(tenant);
-            if (drafts.length === 0) {
-              await sendButtons(from, "Keine Entwurfs-Rechnungen gefunden.", [
-                { id: "new_invoice", title: "Neue Rechnung" },
-                { id: "reset", title: "Abbrechen" },
-              ]);
-            } else {
-              var draftRows: Array<{id: string; title: string; description: string}> = [];
-              drafts.slice(0, 10).forEach(function (inv: any) {
-                draftRows.push({
-                  id: "draft_" + inv.id,
-                  title: (inv.document_nr || "Rechnung").slice(0, 24),
-                  description: ((inv.title || "") + " - CHF " + (inv.total || "0")).slice(0, 72),
-                });
-              });
-              await sendList(from, drafts.length + " Entwurf(e) gefunden:", "Entwurf waehlen", [
-                { title: "Entwuerfe", rows: draftRows },
-              ]);
-              await supabase.from("sessions_handwerker").update({
-                step: "draft_select", search_results: drafts.slice(0, 10), updated_at: new Date().toISOString(),
-              }).eq("id", session.id);
-            }
-          } catch (draftErr) {
-            console.error("[Draft List] Error:", draftErr);
-            await sendText(from, "Fehler beim Laden der Entwuerfe: " + String(draftErr).slice(0, 200));
-          }
+          await updateStep(session.id, "draft_search");
+          await sendText(from, "Entwurf suchen\n\nGib den Kundennamen oder Titel ein.\nOder schreibe *alle* um alle Entwuerfe zu sehen.");
         }
       } else {
         await sendButtons(from, "Bitte waehle:", [
           { id: "new_invoice", title: "Neue Rechnung" },
           { id: "edit_draft", title: "Entwurf bearbeiten" },
         ]);
+      }
+
+    } else if (step === "draft_search") {
+      if (!tenant || !tenant.bexio_access_token) {
+        await sendText(from, "Bexio ist noch nicht verbunden.");
+      } else if (msgBody.length < 2 && text !== "alle") {
+        await sendText(from, "Bitte gib mindestens 2 Buchstaben ein oder schreibe *alle*.");
+      } else {
+        try {
+          await sendText(from, "Entwuerfe werden geladen...");
+          var allDrafts = await bexioListDraftInvoices(tenant);
+          if (allDrafts.length === 0) {
+            await sendButtons(from, "Keine Entwurfs-Rechnungen in Bexio gefunden.", [
+              { id: "new_invoice", title: "Neue Rechnung" },
+              { id: "reset", title: "Abbrechen" },
+            ]);
+            await updateStep(session.id, "invoice_choice");
+          } else {
+            // Enrich drafts with contact names (parallel fetch)
+            var uniqueContactIds: number[] = [];
+            allDrafts.forEach(function (d: any) {
+              if (d.contact_id && uniqueContactIds.indexOf(d.contact_id) === -1) {
+                uniqueContactIds.push(d.contact_id);
+              }
+            });
+            var contactMap: Record<number, string> = {};
+            await Promise.all(uniqueContactIds.map(async function (cid: number) {
+              try {
+                var c = await bexioGetContact(tenant, cid);
+                contactMap[cid] = c.name_1 || ("Kontakt " + cid);
+              } catch (_e) {
+                contactMap[cid] = "Kontakt " + cid;
+              }
+            }));
+
+            // Attach contact name to each draft
+            allDrafts.forEach(function (d: any) {
+              d._contact_name = d.contact_id ? (contactMap[d.contact_id] || "") : "";
+            });
+
+            // Filter by search term (match title, document_nr, or contact name)
+            var filtered = allDrafts;
+            if (text !== "alle") {
+              var term = text.toLowerCase();
+              filtered = allDrafts.filter(function (d: any) {
+                var t = (d.title || "").toLowerCase();
+                var dn = (d.document_nr || "").toLowerCase();
+                var cn = (d._contact_name || "").toLowerCase();
+                return t.indexOf(term) !== -1 || dn.indexOf(term) !== -1 || cn.indexOf(term) !== -1;
+              });
+            }
+
+            if (filtered.length === 0) {
+              await sendButtons(from, "Keine Entwuerfe fuer \"" + msgBody + "\" gefunden.", [
+                { id: "search_again_draft", title: "Nochmal suchen" },
+                { id: "reset", title: "Abbrechen" },
+              ]);
+              await updateStep(session.id, "draft_search_again");
+            } else {
+              var dRows: Array<{id: string; title: string; description: string}> = [];
+              filtered.slice(0, 10).forEach(function (inv: any) {
+                var desc = (inv._contact_name || "Kein Kunde") + " - CHF " + (inv.total || "0");
+                if (inv.title) { desc = inv.title + " | " + desc; }
+                dRows.push({
+                  id: "draft_" + inv.id,
+                  title: (inv.document_nr || "Rechnung " + inv.id).slice(0, 24),
+                  description: desc.slice(0, 72),
+                });
+              });
+              await sendList(from, filtered.length + " Entwurf(e) gefunden:", "Entwurf waehlen", [
+                { title: "Entwuerfe", rows: dRows },
+              ]);
+              await supabase.from("sessions_handwerker").update({
+                step: "draft_select", search_results: filtered.slice(0, 10), updated_at: new Date().toISOString(),
+              }).eq("id", session.id);
+            }
+          }
+        } catch (draftErr) {
+          console.error("[Draft Search] Error:", draftErr);
+          await sendText(from, "Fehler beim Laden der Entwuerfe: " + String(draftErr).slice(0, 200));
+        }
+      }
+
+    } else if (step === "draft_search_again") {
+      if (choice === "search_again_draft") {
+        await updateStep(session.id, "draft_search");
+        await sendText(from, "Gib einen neuen Suchbegriff ein (oder *alle*):");
+      } else {
+        await resetSession(session.id);
+        await sendText(from, "Abgebrochen. Schreibe etwas um neu zu starten.");
       }
 
     } else if (step === "draft_select") {
@@ -851,6 +916,17 @@ async function bexioIssueInvoice(tenant: any, invoiceId: number): Promise<void> 
   await fetch("https://api.bexio.com/2.0/kb_invoice/" + invoiceId + "/issue", {
     method: "POST", headers: { Authorization: "Bearer " + token },
   });
+}
+
+async function bexioGetContact(tenant: any, contactId: number): Promise<any> {
+  var token = await getBexioToken(tenant);
+  var resp = await fetch("https://api.bexio.com/2.0/contact/" + contactId, {
+    headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+  });
+  if (!resp.ok) {
+    throw new Error("Bexio Kontakt laden fehlgeschlagen (" + resp.status + ")");
+  }
+  return resp.json();
 }
 
 async function bexioListDraftInvoices(tenant: any): Promise<any[]> {
