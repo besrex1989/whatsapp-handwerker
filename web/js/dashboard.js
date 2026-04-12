@@ -82,10 +82,15 @@ async function loadDashboard() {
     }
   }
 
-  // Bot number
+  // Bot number + WhatsApp deep link (wa.me expects digits only, no "+" or spaces)
   var botNrEl = document.getElementById("bot-number");
-  if (botNrEl && typeof BOT_WHATSAPP_NUMBER !== "undefined") {
-    botNrEl.textContent = BOT_WHATSAPP_NUMBER;
+  var botLinkEl = document.getElementById("bot-whatsapp-link");
+  if (typeof BOT_WHATSAPP_NUMBER !== "undefined") {
+    if (botNrEl) botNrEl.textContent = BOT_WHATSAPP_NUMBER;
+    if (botLinkEl) {
+      var digits = String(BOT_WHATSAPP_NUMBER).replace(/\D/g, "");
+      botLinkEl.href = "https://wa.me/" + digits + "?text=" + encodeURIComponent("hilfe");
+    }
   }
 }
 
