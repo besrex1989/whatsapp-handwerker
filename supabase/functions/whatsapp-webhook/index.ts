@@ -1013,6 +1013,16 @@ async function ensureBexioIds(
   var taxCandidates: number[] = [];
   var updated = false;
 
+  // If the tenant has explicitly picked a revenue account in the dashboard
+  // (tenants.bexio_preferred_account_id), honor it over the auto-detection
+  // heuristic. We still allow force=true to bypass the cache; but if a
+  // preference is set, that's what we re-resolve to instead of guessing.
+  if (!accountId && tenant.bexio_preferred_account_id) {
+    accountId = Number(tenant.bexio_preferred_account_id);
+    console.log("[Bexio] Using tenant-preferred revenue account id=" + accountId);
+    updated = true;
+  }
+
   if (!userId) {
     console.log("[Bexio] Fetching user_id...");
     var userResp = await fetch("https://api.bexio.com/3.0/users/me", {

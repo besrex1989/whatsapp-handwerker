@@ -76,6 +76,7 @@ async function loadDashboard() {
   var bexioStatus = document.getElementById("bexio-status");
   var bexioBtn = document.getElementById("bexio-connect-btn");
   var bexioDisconnectBtn = document.getElementById("bexio-disconnect-btn");
+  var bexioAccountBlock = document.getElementById("bexio-account-block");
   if (bexioStatus) {
     if (tenant.bexio_access_token) {
       bexioStatus.textContent = "Verbunden";
@@ -85,6 +86,12 @@ async function loadDashboard() {
         bexioBtn.className = "btn btn-outline";
       }
       if (bexioDisconnectBtn) bexioDisconnectBtn.style.display = "";
+      if (bexioAccountBlock) {
+        bexioAccountBlock.style.display = "";
+        // Fire-and-forget: load accounts into the dropdown. Don't await —
+        // we don't want to block the rest of the dashboard render.
+        loadBexioAccounts(tenant.id);
+      }
     } else {
       bexioStatus.textContent = "Nicht verbunden";
       bexioStatus.className = "status-badge inactive";
@@ -93,6 +100,7 @@ async function loadDashboard() {
         bexioBtn.className = "btn btn-primary";
       }
       if (bexioDisconnectBtn) bexioDisconnectBtn.style.display = "none";
+      if (bexioAccountBlock) bexioAccountBlock.style.display = "none";
     }
   }
 
@@ -330,6 +338,146 @@ async function connectBexio() {
     window.location.href = data.url;
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
+  }
+}
+
+// ===== Bexio Erloeskonto Praeferenz =====
+
+// Remember the tenant id so saveRevenueAccountPreference() can reuse it
+// without having to re-query tenants.
+var _bexioAccountsTenantId = null;
+
+// Fetch the tenant's Bexio revenue accounts and populate the dropdown.
+// Silent on failure — this is a non-critical enhancement; if the Edge
+// Function is unavailable the dashboard should still work.
+async function loadBexioAccounts(tenantId) {
+  _bexioAccountsTenantId = tenantId;
+  var select = document.getElementById("bexio-account-select");
+  var currentLabel = document.getElementById("bexio-account-current");
+  if (!select) return;
+  select.innerHTML = '<option value="">Laedt...</option>';
+  select.disabled = true;
+
+  try {
+    var sessionResult = await supabase.auth.getSession();
+    var accessToken = sessionResult.data.session
+      ? sessionResult.data.session.access_token
+      : SUPABASE_ANON_KEY;
+
+    var resp = await fetch(
+      SUPABASE_URL + "/functions/v1/bexio-accounts?tenant_id=" + encodeURIComponent(tenantId),
+      {
+        method: "GET",
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": "Bearer " + accessToken,
+        },
+      },
+    );
+
+    if (!resp.ok) {
+      var errBody = await resp.text();
+      console.warn("[loadBexioAccounts] failed:", resp.status, errBody);
+      select.innerHTML = '<option value="">Konten konnten nicht geladen werden</option>';
+      return;
+    }
+
+    var data = await resp.json();
+    var accounts = Array.isArray(data.accounts) ? data.accounts : [];
+    var preferredId = data.preferred_account_id;
+
+    select.innerHTML = "";
+    var optAuto = document.createElement("option");
+    optAuto.value = "";
+    optAuto.textContent = "Automatisch (3400 > 3200 > 3000)";
+    select.appendChild(optAuto);
+
+    for (var i = 0; i < accounts.length; i++) {
+      var a = accounts[i];
+      var opt = document.createElement("option");
+      opt.value = String(a.id);
+      var label = a.account_no + " " + (a.name || "");
+      if (!a.is_revenue) label += " (Skonto/Bestand)";
+      opt.textContent = label;
+      if (preferredId != null && Number(a.id) === Number(preferredId)) {
+        opt.selected = true;
+      }
+      select.appendChild(opt);
+    }
+
+    // Update the "current" line above the select.
+    if (currentLabel) {
+      if (preferredId != null) {
+        var picked = null;
+        for (var j = 0; j < accounts.length; j++) {
+          if (Number(accounts[j].id) === Number(preferredId)) { picked = accounts[j]; break; }
+        }
+        currentLabel.textContent = picked
+          ? (picked.account_no + " " + (picked.name || ""))
+          : ("Konto-ID " + preferredId);
+      } else {
+        currentLabel.textContent = "Automatisch";
+      }
+    }
+  } catch (err) {
+    console.warn("[loadBexioAccounts] error:", err);
+    select.innerHTML = '<option value="">Fehler beim Laden</option>';
+  } finally {
+    select.disabled = false;
+  }
+}
+
+// Save the selected revenue account as the tenant's preference.
+async function saveRevenueAccountPreference() {
+  var select = document.getElementById("bexio-account-select");
+  if (!select) return;
+  if (!_bexioAccountsTenantId) {
+    alert("Tenant-Kontext fehlt. Bitte Seite neu laden.");
+    return;
+  }
+
+  var raw = select.value;
+  var accountId = raw === "" ? null : Number(raw);
+
+  var btnList = document.querySelectorAll('#bexio-account-block button');
+  for (var b = 0; b < btnList.length; b++) btnList[b].disabled = true;
+
+  try {
+    var sessionResult = await supabase.auth.getSession();
+    var accessToken = sessionResult.data.session
+      ? sessionResult.data.session.access_token
+      : SUPABASE_ANON_KEY;
+
+    var resp = await fetch(
+      SUPABASE_URL + "/functions/v1/bexio-accounts",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": "Bearer " + accessToken,
+        },
+        body: JSON.stringify({
+          tenant_id: _bexioAccountsTenantId,
+          account_id: accountId,
+        }),
+      },
+    );
+
+    if (!resp.ok) {
+      var errBody = await resp.text();
+      alert("Speichern fehlgeschlagen (" + resp.status + "): " + errBody);
+      return;
+    }
+
+    alert(accountId == null
+      ? "Erloeskonto-Vorzug entfernt — Auto-Erkennung aktiv."
+      : "Erloeskonto gespeichert. Wird bei der naechsten Rechnung verwendet.");
+    loadDashboard();
+  } catch (err) {
+    alert("Netzwerkfehler: " + (err && err.message ? err.message : err));
+  } finally {
+    for (var b2 = 0; b2 < btnList.length; b2++) btnList[b2].disabled = false;
   }
 }
 
