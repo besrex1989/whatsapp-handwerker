@@ -1031,10 +1031,54 @@ async function ensureBexioIds(
     });
     if (accResp.ok) {
       var accounts = await accResp.json();
-      var revAcc = Array.isArray(accounts)
-        ? accounts.find(function (a: any) { return a.account_no && String(a.account_no).startsWith("3"); })
-        : null;
-      if (revAcc) { accountId = revAcc.id; updated = true; }
+      if (Array.isArray(accounts)) {
+        // Swiss KMU-Kontorahmen 3xxx breakdown:
+        //   3000 Produktionsertrag, 3200 Handelsertrag,
+        //   3400 Dienstleistungsertrag  ← typical for Handwerker,
+        //   3600 Uebriger Ertrag, 3700 Eigenleistungen,
+        //   3800 Erloesminderungen (Skonto/Rabatte — NOT revenue!),
+        //   3900 Bestandesaenderungen.
+        // Picking the first account that starts with "3" used to land on
+        // 3800 (Skonto) which is wrong. Instead rank by the typical prefix.
+        var preferredPrefixes = ["3400", "3200", "3000", "3600", "3700"];
+        function accountNo(a: any): string {
+          return a && a.account_no ? String(a.account_no) : "";
+        }
+        function isActiveAcc(a: any): boolean {
+          return a.is_active === undefined || a.is_active === null ? true : !!a.is_active;
+        }
+        function isRevenueAccount(a: any): boolean {
+          var n = accountNo(a);
+          if (!n || n.charAt(0) !== "3") return false;
+          // Exclude 38xx (Erloesminderungen) and 39xx (Bestandesaenderungen).
+          if (n.charAt(1) === "8" || n.charAt(1) === "9") return false;
+          return true;
+        }
+        var revAccounts = accounts.filter(function (a: any) {
+          return isActiveAcc(a) && isRevenueAccount(a);
+        });
+        // Rank: exact-prefix match against preferred list; ties by account_no asc.
+        revAccounts.sort(function (a: any, b: any) {
+          var na = accountNo(a), nb = accountNo(b);
+          function rank(n: string): number {
+            for (var i = 0; i < preferredPrefixes.length; i++) {
+              if (n.indexOf(preferredPrefixes[i]) === 0) return i;
+            }
+            return 999;
+          }
+          var ra = rank(na), rb = rank(nb);
+          if (ra !== rb) return ra - rb;
+          return na.localeCompare(nb);
+        });
+        var revAcc = revAccounts[0] || null;
+        if (revAcc) {
+          console.log("[Bexio] Selected revenue account:", revAcc.account_no, revAcc.name || "", "id=" + revAcc.id);
+          accountId = revAcc.id;
+          updated = true;
+        } else {
+          console.warn("[Bexio] No revenue account (3000-3799) found among", accounts.length, "accounts.");
+        }
+      }
     }
   }
   if (!taxId) {
