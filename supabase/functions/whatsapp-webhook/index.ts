@@ -864,16 +864,25 @@ async function bexioCreateContact(tenant: any, c: { name: string; address: strin
     throw new Error("Bexio user_id konnte nicht ermittelt werden. Bitte Bexio neu verbinden.");
   }
 
-  // Bexio POST /2.0/contact does not accept an "address" field on creation;
-  // street addresses have to be added via the separate /contact/{id}/address
-  // endpoint. We save postcode/city on create and post the street afterwards.
+  // Bexio deprecated the monolithic "address" field in June 2025 and now
+  // uses structured fields: street_name, house_number, zip_code, city.
+  // We split e.g. "Teststrasse 14" into street_name + house_number.
   var payload: any = {
     contact_type_id: 1,
     name_1: c.name,
     user_id: userId,
     owner_id: userId,
   };
-  if (c.postcode) payload.postcode = c.postcode;
+  if (c.address) {
+    var streetMatch = c.address.match(/^(.+?)\s+(\d+[a-zA-Z]?)\s*$/);
+    if (streetMatch) {
+      payload.street_name = streetMatch[1].trim();
+      payload.house_number = streetMatch[2].trim();
+    } else {
+      payload.street_name = c.address;
+    }
+  }
+  if (c.postcode) payload.zip_code = c.postcode;
   if (c.city) payload.city = c.city;
 
   console.log("[Bexio] Creating contact:", JSON.stringify(payload));
