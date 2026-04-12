@@ -126,8 +126,14 @@ async function handleRegister(e) {
   });
 
   if (tenantResult.error) {
-    // Tenant might already exist
     console.error("Tenant insert error:", tenantResult.error);
+    errorEl.textContent = "Konto erstellt, aber Tenant konnte nicht angelegt werden: "
+      + tenantResult.error.message
+      + ". Bitte Support kontaktieren.";
+    errorEl.style.display = "block";
+    btn.textContent = "Kostenlos registrieren";
+    btn.disabled = false;
+    return;
   }
 
   successEl.textContent = "Konto erstellt! Du kannst dich jetzt anmelden.";
