@@ -707,6 +707,86 @@ body {
   outline-offset: 2px;
 }
 
+/* ===== Legal pages (Impressum / Datenschutz / AGB) ===== */
+.legal-page {
+  max-width: 760px;
+  margin: 48px auto 80px;
+  padding: 0 24px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.legal-page h1 {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.legal-page .last-updated {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-bottom: 32px;
+}
+
+.legal-page h2 {
+  font-size: 20px;
+  margin-top: 32px;
+  margin-bottom: 10px;
+}
+
+.legal-page h3 {
+  font-size: 16px;
+  margin-top: 20px;
+  margin-bottom: 6px;
+}
+
+.legal-page p,
+.legal-page ul,
+.legal-page ol {
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.legal-page ul,
+.legal-page ol {
+  padding-left: 22px;
+}
+
+.legal-page li {
+  margin-bottom: 4px;
+}
+
+.legal-page a {
+  color: var(--primary-dark);
+}
+
+.legal-page .placeholder {
+  background: #fff8dd;
+  border-bottom: 1px dashed #d97706;
+  padding: 0 2px;
+}
+
+.legal-page table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0 20px;
+  font-size: 14px;
+}
+
+.legal-page th,
+.legal-page td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.legal-page th {
+  color: var(--text-muted);
+  font-weight: 500;
+  background: var(--bg-alt);
+}
+
 /* status dots */
 .status-badge {
   display: inline-flex;

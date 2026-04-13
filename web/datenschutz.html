@@ -16,11 +16,193 @@
     </div>
   </nav>
 
-  <main class="container" style="max-width: 720px; margin: 48px auto; padding: 0 16px; line-height: 1.6;">
+  <main class="legal-page">
     <h1>Datenschutzerklärung</h1>
-    <p style="color: var(--gray);">
-      Diese Seite wird in Kürze bereitgestellt. Bis dahin erreichst du uns
-      per E-Mail unter <a href="mailto:info@whatsbill.ch">info@whatsbill.ch</a>.
+    <p class="last-updated">Stand: April 2026</p>
+
+    <p>
+      Der Schutz deiner Personendaten ist uns wichtig. In dieser Erklärung
+      informieren wir dich, welche Daten wir im Rahmen der Nutzung von
+      WhatsBill bearbeiten, zu welchem Zweck und wem wir sie bekanntgeben.
+      Grundlage bilden das revidierte Schweizer Datenschutzgesetz (revDSG)
+      und – soweit anwendbar – die EU-Datenschutz-Grundverordnung (DSGVO).
+    </p>
+
+    <h2>1. Verantwortliche Stelle</h2>
+    <p>
+      <strong><span class="placeholder">[Firmenname]</span></strong><br>
+      <span class="placeholder">[Strasse und Hausnummer]</span>, <span class="placeholder">[PLZ Ort]</span>, Schweiz<br>
+      E-Mail: <a href="mailto:info@whatsbill.ch">info@whatsbill.ch</a>
+    </p>
+
+    <h2>2. Welche Daten wir bearbeiten</h2>
+
+    <h3>2.1 Kontodaten</h3>
+    <p>Bei der Registrierung erfassen wir:</p>
+    <ul>
+      <li>Vor- und Nachname</li>
+      <li>E-Mail-Adresse</li>
+      <li>WhatsApp-Telefonnummer</li>
+      <li>Passwort (nur als Hash, wir sehen dein Klartext-Passwort nie)</li>
+    </ul>
+
+    <h3>2.2 Nutzungsdaten des Bots</h3>
+    <p>
+      Wenn du über WhatsApp mit dem Bot chattest, verarbeiten wir die
+      Inhalte der Nachrichten (Kunden­namen, Positionen, Beträge, Fotos),
+      damit wir daraus Rechnungen und Angebote in deinem Bexio-Konto
+      erstellen können. Diese Daten werden in unserer Datenbank
+      gespeichert, solange es für die Erstellung und spätere Fortführung
+      eines Entwurfs nötig ist.
+    </p>
+
+    <h3>2.3 Bexio-Integration</h3>
+    <p>
+      Mit deinem Einverständnis (OAuth-Flow) erhalten wir ein Access-Token,
+      mit dem WhatsBill in deinem Namen auf die Bexio-API zugreift – nur
+      für die Funktionen, die du aktiv nutzt (Kunden anlegen, Rechnungen
+      und Angebote erstellen, PDFs abrufen). Wir speichern das Access-Token
+      und den Refresh-Token verschlüsselt in unserer Datenbank. Du kannst
+      die Verbindung jederzeit im Dashboard trennen.
+    </p>
+
+    <h3>2.4 Zahlungsdaten</h3>
+    <p>
+      Die Zahlungsabwicklung erfolgt über Stripe. WhatsBill erhält von
+      Stripe nur technische Informationen (Kundennummer, Abo-Status,
+      Rechnungsnummern, Beträge) – Kreditkartendaten werden ausschliesslich
+      von Stripe verarbeitet und erreichen unsere Server nicht.
+    </p>
+
+    <h3>2.5 Technische Daten</h3>
+    <p>
+      Beim Aufruf der Website fallen die üblichen Server-Logdaten an
+      (IP-Adresse, Browser, Zeitpunkt, angefragte Ressource). Diese werden
+      von unserem Hosting-Provider Vercel kurzzeitig zur Betriebssicherheit
+      gespeichert und nach kurzer Zeit automatisch gelöscht. Wir setzen
+      bewusst keine Tracking-Cookies und kein Analytics-Tool ein.
+    </p>
+
+    <h2>3. Zwecke der Bearbeitung</h2>
+    <ul>
+      <li>Bereitstellung der Dienstleistung (Konto, Chatbot, Bexio-Integration)</li>
+      <li>Abwicklung von Zahlungen und Rechnungsstellung</li>
+      <li>Kommunikation mit dir (z.&nbsp;B. Support, Systemnachrichten)</li>
+      <li>Einhaltung gesetzlicher Pflichten (Buchführung, Steuern)</li>
+      <li>Verbesserung und Absicherung des Betriebs</li>
+    </ul>
+
+    <h2>4. Rechtsgrundlagen</h2>
+    <p>
+      Wir bearbeiten deine Daten gestützt auf:
+    </p>
+    <ul>
+      <li>Vertragserfüllung (Nutzung von WhatsBill),</li>
+      <li>gesetzliche Pflichten (Buchhaltung, Steuerrecht),</li>
+      <li>überwiegendes berechtigtes Interesse (Betrieb, Sicherheit, Fraud-Prevention),</li>
+      <li>deine Einwilligung, soweit erforderlich (z.&nbsp;B. Bexio-Verbindung).</li>
+    </ul>
+
+    <h2>5. Bekanntgabe an Dritte (Auftragsbearbeiter)</h2>
+    <p>
+      Zur Erbringung der Dienstleistung nutzen wir sorgfältig ausgewählte
+      Dienstleister:
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Dienst</th>
+          <th>Zweck</th>
+          <th>Standort</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Supabase Inc.</td>
+          <td>Datenbank, Auth, Edge Functions</td>
+          <td>EU / USA</td>
+        </tr>
+        <tr>
+          <td>Vercel Inc.</td>
+          <td>Hosting der Website</td>
+          <td>EU / USA</td>
+        </tr>
+        <tr>
+          <td>Stripe Payments Europe Ltd.</td>
+          <td>Zahlungsabwicklung, Abonnement</td>
+          <td>Irland / USA</td>
+        </tr>
+        <tr>
+          <td>bexio AG</td>
+          <td>Buchhaltung / Rechnungsstellung</td>
+          <td>Schweiz</td>
+        </tr>
+        <tr>
+          <td>Meta Platforms Ireland Ltd.</td>
+          <td>WhatsApp Business Cloud API</td>
+          <td>Irland / USA</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      Mit allen Dienstleistern bestehen Auftragsdatenbearbeitungsverträge
+      (Data Processing Agreements). Bei Übermittlung in Länder ohne
+      angemessenes Datenschutzniveau stützen wir uns auf die
+      EU-Standard­vertragsklauseln (SCC) oder gleichwertige Garantien.
+    </p>
+
+    <h2>6. Speicherdauer</h2>
+    <p>
+      Wir speichern Personendaten nur so lange, wie es für die oben
+      genannten Zwecke notwendig ist. Buchhaltungs­relevante Daten
+      (z.&nbsp;B. Rechnungen) bewahren wir 10 Jahre auf (Art. 958f OR).
+      Kontodaten löschen wir auf Anfrage, spätestens 90 Tage nach
+      Kündigung – sofern keine gesetzliche Aufbewahrungspflicht entgegensteht.
+    </p>
+
+    <h2>7. Deine Rechte</h2>
+    <p>Du hast das Recht:</p>
+    <ul>
+      <li>Auskunft über die zu dir bearbeiteten Daten zu verlangen,</li>
+      <li>Berichtigung unrichtiger Daten zu verlangen,</li>
+      <li>Löschung zu verlangen, soweit keine Aufbewahrungspflicht besteht,</li>
+      <li>die Bearbeitung einzuschränken oder ihr zu widersprechen,</li>
+      <li>deine Daten in einem gängigen Format zu erhalten (Portabilität),</li>
+      <li>eine erteilte Einwilligung jederzeit mit Wirkung für die Zukunft zu widerrufen.</li>
+    </ul>
+    <p>
+      Für diese Anliegen genügt eine E-Mail an
+      <a href="mailto:info@whatsbill.ch">info@whatsbill.ch</a>.
+      Zudem steht dir das Beschwerderecht beim Eidgenössischen
+      Datenschutz- und Öffentlichkeits­beauftragten (EDÖB) bzw. – für
+      EU-Nutzer – bei der zuständigen Aufsichts­behörde offen.
+    </p>
+
+    <h2>8. Sicherheit</h2>
+    <p>
+      Wir setzen angemessene technische und organisatorische Massnahmen
+      ein, um deine Daten vor Verlust, Missbrauch und unbefugtem Zugriff
+      zu schützen: Transportverschlüsselung (TLS), Verschlüsselung
+      sensibler Token in der Datenbank, Zugriffskontrollen und regelmässige
+      Aktualisierungen der eingesetzten Systeme.
+    </p>
+
+    <h2>9. Cookies</h2>
+    <p>
+      WhatsBill verwendet ausschliesslich technisch notwendige Cookies
+      (Login-Session). Es werden keine Tracking- oder Werbe-Cookies
+      gesetzt.
+    </p>
+
+    <h2>10. Änderungen</h2>
+    <p>
+      Wir können diese Datenschutzerklärung anpassen, um sie an geänderte
+      Gesetze oder an Änderungen des Dienstes anzupassen. Die jeweils
+      aktuelle Version ist auf dieser Seite abrufbar.
+    </p>
+
+    <p style="margin-top: 32px;">
+      <a href="/">&larr; Zur Startseite</a>
     </p>
   </main>
 </body>
