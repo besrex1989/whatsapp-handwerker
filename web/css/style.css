@@ -668,6 +668,7 @@ body {
   color: var(--text);
   font-weight: 500;
   text-align: right;
+  margin-left: auto;
 }
 
 .dash-actions {
@@ -680,6 +681,30 @@ body {
 .dash-actions .btn {
   padding: 6px 12px;
   font-size: 13px;
+}
+
+/* Inline pencil-style edit button for dash-row */
+.edit-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  margin-left: 8px;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.edit-btn:hover {
+  color: var(--text);
+  background: var(--bg-alt);
+}
+
+.edit-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 /* status dots */

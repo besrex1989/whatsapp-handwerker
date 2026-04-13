@@ -36,10 +36,12 @@
           <div class="dash-row">
             <span class="label">Name</span>
             <span class="value" id="tenant-name">—</span>
+            <button class="edit-btn" onclick="changeFullName()" aria-label="Name ändern" title="Bearbeiten">✎</button>
           </div>
           <div class="dash-row">
             <span class="label">E-Mail</span>
             <span class="value" id="tenant-email">—</span>
+            <button class="edit-btn" onclick="changeEmail()" aria-label="E-Mail ändern" title="Bearbeiten">✎</button>
           </div>
           <div class="dash-row">
             <span class="label">Plan</span>
@@ -52,11 +54,7 @@
           <div class="dash-row">
             <span class="label">WhatsApp</span>
             <span class="value" id="whatsapp-nr">—</span>
-          </div>
-          <div class="dash-actions">
-            <button class="btn btn-outline" onclick="changeFullName()">Name</button>
-            <button class="btn btn-outline" onclick="changeEmail()">E-Mail</button>
-            <button class="btn btn-outline" onclick="changeWhatsappNumber()">Nummer</button>
+            <button class="edit-btn" onclick="changeWhatsappNumber()" aria-label="WhatsApp-Nummer ändern" title="Bearbeiten">✎</button>
           </div>
         </div>
 
