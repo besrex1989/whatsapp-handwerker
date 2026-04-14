@@ -243,6 +243,32 @@ body {
   padding: 80px 0;
 }
 
+.faq-section {
+  padding: 80px 0;
+  background: var(--bg-alt);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.faq-list {
+  max-width: 720px;
+  margin: 40px auto 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 24px;
+}
+
+.faq-section .faq-item > summary {
+  font-size: 16px;
+  padding: 18px 28px 18px 0;
+}
+
+.faq-section .faq-item > p {
+  padding: 0 0 20px;
+  font-size: 15px;
+}
+
 .how-it-works {
   padding: 80px 0;
   background: var(--bg-alt);
