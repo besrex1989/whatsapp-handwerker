@@ -1822,7 +1822,7 @@ async function sendEmailNotification(email: string, docNr: string, total: string
     method: "POST",
     headers: { Authorization: "Bearer " + Deno.env.get("RESEND_API_KEY")!, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: "WhatsApp Handwerker <noreply@resend.dev>",
+      from: "WhatsBill <noreply@whatsbill.ch>",
       to: email,
       subject: label + " " + docNr + " erstellt",
       html: "<h2>Neue" + (docType === "offer" ? "s " : " ") + label + " erstellt</h2><p>" + label + "s-Nr: <strong>" + docNr + "</strong></p><p>Total: CHF " + total + "</p><p>" + articleNom + " " + label + " findest du in deinem Bexio-Konto.</p>",
