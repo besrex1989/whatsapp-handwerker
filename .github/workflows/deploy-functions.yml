@@ -25,27 +25,14 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      - name: Deploy whatsapp-webhook
-        run: supabase functions deploy whatsapp-webhook --no-verify-jwt
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Deploy stripe-webhook
-        run: supabase functions deploy stripe-webhook --no-verify-jwt
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Deploy stripe-checkout
-        run: supabase functions deploy stripe-checkout --no-verify-jwt
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Deploy stripe-portal
-        run: supabase functions deploy stripe-portal --no-verify-jwt
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Deploy bexio-oauth
-        run: supabase functions deploy bexio-oauth --no-verify-jwt
+      - name: Deploy all Edge Functions
+        run: |
+          for dir in supabase/functions/*/; do
+            name=$(basename "$dir")
+            # Skip the shared helpers directory (not a deployable function)
+            if [ "$name" = "_shared" ]; then continue; fi
+            echo "=== Deploying $name ==="
+            supabase functions deploy "$name" --no-verify-jwt
+          done
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
