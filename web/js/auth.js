@@ -23,10 +23,8 @@ var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// The WhatsApp business number the bot runs on (Meta test number for now).
-// TODO: move into env/config once a permanent System User token with a
-// dedicated company number is provisioned.
-var BOT_WHATSAPP_NUMBER = "+1 555 173 7232";
+// The WhatsApp business number the bot runs on.
+var BOT_WHATSAPP_NUMBER = "+41 79 419 73 21";
 
 // ===== Phone helpers =====
 
