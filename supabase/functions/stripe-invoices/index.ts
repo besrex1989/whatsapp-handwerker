@@ -10,7 +10,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import Stripe from "https://esm.sh/stripe@16.0.0?target=deno";
+import Stripe from "https://esm.sh/stripe@18.5.0?target=denonext";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -19,8 +19,11 @@ const CORS_HEADERS = {
   "Access-Control-Max-Age": "86400",
 };
 
+// Fetch http client — see stripe-webhook for context on why the node
+// http client breaks on Supabase Edge Runtime (Deno 2.x).
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
   apiVersion: "2024-06-20",
+  httpClient: Stripe.createFetchHttpClient(),
 });
 
 serve(async (req) => {
