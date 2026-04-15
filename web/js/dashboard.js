@@ -10,12 +10,23 @@ async function loadDashboard() {
     emailEl.textContent = user.email;
   }
 
-  // Load tenant data
+  // Load tenant data.
+  //
+  // We match on email case-insensitively (.ilike with escaped LIKE wildcards)
+  // because the tenants.email column has historically been stored with mixed
+  // casing, while auth.users.email for the current session may differ in
+  // case. The RLS SELECT policy is already case-insensitive — using .ilike
+  // keeps the client filter consistent with it. .maybeSingle() returns
+  // { data: null } instead of a PGRST116 error when no row matches, and
+  // .limit(1) guards against the (theoretical) multi-row case so we never
+  // surface the confusing "Cannot coerce the result to a single JSON object"
+  // alert to the user.
   var result = await supabase
     .from("tenants")
     .select("*")
-    .eq("email", user.email)
-    .single();
+    .ilike("email", escapeLikePattern(user.email))
+    .limit(1)
+    .maybeSingle();
 
   var tenant = result.data;
 
@@ -134,7 +145,7 @@ async function changeFullName() {
   var updateResult = await supabase
     .from("tenants")
     .update({ full_name: input, updated_at: new Date().toISOString() })
-    .eq("email", user.email);
+    .ilike("email", escapeLikePattern(user.email));
 
   if (updateResult.error) {
     alert("Fehler beim Speichern: " + updateResult.error.message);
@@ -209,7 +220,7 @@ async function changeWhatsappNumber() {
   var updateResult = await supabase
     .from("tenants")
     .update({ whatsapp_number: norm.phone, updated_at: new Date().toISOString() })
-    .eq("email", user.email);
+    .ilike("email", escapeLikePattern(user.email));
 
   if (updateResult.error) {
     // Most likely cause: another tenant already owns that number (unique constraint)
@@ -251,7 +262,7 @@ async function disconnectBexio() {
       bexio_tax_id: null,
       updated_at: new Date().toISOString(),
     })
-    .eq("email", user.email);
+    .ilike("email", escapeLikePattern(user.email));
 
   if (btn) { btn.disabled = false; btn.textContent = "Verbindung trennen"; }
 
@@ -274,12 +285,15 @@ async function connectBexio() {
     var user = await checkAuth();
     if (!user) { alert("Nicht angemeldet."); return; }
 
-    // Get tenant ID
+    // Get tenant ID — case-insensitive match to tolerate historical
+    // mixed-case emails; .maybeSingle() keeps "no tenant yet" as a clean
+    // null result instead of a PGRST116 error.
     var result = await supabase
       .from("tenants")
       .select("id")
-      .eq("email", user.email)
-      .single();
+      .ilike("email", escapeLikePattern(user.email))
+      .limit(1)
+      .maybeSingle();
 
     if (result.error) {
       alert("Tenant-Abfrage fehlgeschlagen: " + result.error.message);
@@ -592,7 +606,9 @@ async function upgradeSubscription(plan) {
 
   try {
     var tenantResult = await supabase
-      .from("tenants").select("id").eq("email", user.email).single();
+      .from("tenants").select("id")
+      .ilike("email", escapeLikePattern(user.email))
+      .limit(1).maybeSingle();
     if (tenantResult.error || !tenantResult.data) {
       alert("Tenant nicht gefunden.");
       return;
@@ -655,7 +671,9 @@ async function openBillingPortal() {
 
   try {
     var tenantResult = await supabase
-      .from("tenants").select("id").eq("email", user.email).single();
+      .from("tenants").select("id")
+      .ilike("email", escapeLikePattern(user.email))
+      .limit(1).maybeSingle();
     if (tenantResult.error || !tenantResult.data) {
       alert("Tenant nicht gefunden.");
       return;
@@ -726,7 +744,9 @@ async function toggleInvoicesList(triggerBtn) {
     if (!user) { listEl.innerHTML = '<p class="help-text">Nicht angemeldet.</p>'; return; }
 
     var tenantResult = await supabase
-      .from("tenants").select("id").eq("email", user.email).single();
+      .from("tenants").select("id")
+      .ilike("email", escapeLikePattern(user.email))
+      .limit(1).maybeSingle();
     if (tenantResult.error || !tenantResult.data) {
       listEl.innerHTML = '<p class="help-text">Tenant nicht gefunden.</p>';
       return;
