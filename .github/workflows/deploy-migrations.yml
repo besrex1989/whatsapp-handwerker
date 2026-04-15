@@ -1,0 +1,43 @@
+name: Deploy Supabase Migrations
+
+on:
+  # Manual runs from the Actions tab.
+  workflow_dispatch: {}
+  # Auto-run whenever a new migration lands on main.
+  push:
+    branches:
+      - main
+    paths:
+      - 'supabase/migrations/**'
+      - '.github/workflows/deploy-migrations.yml'
+
+concurrency:
+  # Never run two migration deploys against the same DB in parallel.
+  group: supabase-migrations
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link Supabase project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Apply pending migrations
+        # `supabase db push` is idempotent — it only applies migrations the
+        # remote doesn't already have, tracked by the `supabase_migrations`
+        # schema. Safe to re-run.
+        run: supabase db push --include-all
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
