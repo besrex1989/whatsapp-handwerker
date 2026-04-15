@@ -52,6 +52,12 @@ function normalizePhoneCH(input) {
   return { ok: true, phone: p };
 }
 
+// Escape the `_` and `%` wildcards in a LIKE/ILIKE pattern so that a raw
+// user value (e.g. an email with an underscore) only matches itself.
+function escapeLikePattern(s) {
+  return String(s == null ? "" : s).replace(/[\\%_]/g, "\\$&");
+}
+
 // ===== Auth State Check =====
 async function checkAuth() {
   var session = await supabase.auth.getSession();
