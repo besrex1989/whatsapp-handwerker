@@ -147,14 +147,14 @@ Deno.serve(async (req: Request) => {
           if (trialEnd < Date.now()) {
             await sendText(from,
               "Deine Testphase ist abgelaufen.\n" +
-              "Bitte upgrade auf ein Abo unter https://www.whatsbill.ch/dashboard.html");
+              "Bitte upgrade auf ein Abo unter https://www.billaro.ch/dashboard.html");
             return new Response("OK", { status: 200 });
           }
         } else if (!isActive) {
           // past_due, cancelled, pending, oder manuell deaktiviert
           await sendText(from,
             "Dein Konto ist nicht aktiv (" + planRaw + ").\n" +
-            "Bitte prüfe dein Abo unter https://www.whatsbill.ch/dashboard.html");
+            "Bitte prüfe dein Abo unter https://www.billaro.ch/dashboard.html");
           return new Response("OK", { status: 200 });
         }
       }
@@ -1822,7 +1822,7 @@ async function sendEmailNotification(email: string, docNr: string, total: string
     method: "POST",
     headers: { Authorization: "Bearer " + Deno.env.get("RESEND_API_KEY")!, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: "WhatsBill <noreply@whatsbill.ch>",
+      from: "Billaro <noreply@billaro.ch>",
       to: email,
       subject: label + " " + docNr + " erstellt",
       html: "<h2>Neue" + (docType === "offer" ? "s " : " ") + label + " erstellt</h2><p>" + label + "s-Nr: <strong>" + docNr + "</strong></p><p>Total: CHF " + total + "</p><p>" + articleNom + " " + label + " findest du in deinem Bexio-Konto.</p>",

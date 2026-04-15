@@ -7,7 +7,7 @@ was dieses Projekt ist, wie es deployed wird und worauf man aufpassen muss.
 
 ---
 
-## Was ist WhatsBill?
+## Was ist Billaro?
 
 Ein WhatsApp-first Rechnungs-/Angebots-Assistent für Schweizer Handwerker.
 Der Handwerker (Tenant) schickt Fotos/Sprachnachrichten an die Bot-Nummer
@@ -15,10 +15,10 @@ Der Handwerker (Tenant) schickt Fotos/Sprachnachrichten an die Bot-Nummer
 User die Eckdaten bestätigen und erstellt daraus ein Bexio-Dokument
 (Rechnung oder Offerte). PDF-Vorschau kommt zurück via WhatsApp.
 
-Nebenan läuft ein Self-Service-Dashboard auf https://whatsbill.ch zum
+Nebenan läuft ein Self-Service-Dashboard auf https://billaro.ch zum
 Registrieren, Bexio-Verbinden, Abo-Management.
 
-Domain: **whatsbill.ch** (Vercel).
+Domain: **billaro.ch** (Vercel).
 
 ## Tech-Stack
 
