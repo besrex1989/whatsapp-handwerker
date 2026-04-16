@@ -826,6 +826,73 @@ async function toggleInvoicesList(triggerBtn) {
   }
 }
 
+// ===== Konto löschen (Gefahrenzone) =====
+
+// Triggers the full account wipe via the delete-account Edge Function.
+// UX is two-step: a confirm(), then a prompt() asking the user to type
+// LÖSCHEN. Once the Edge Function reports success we sign the user out
+// locally and redirect to login.html#deleted so the login page can show
+// a "Konto gelöscht" banner.
+async function deleteAccount() {
+  var user = await checkAuth();
+  if (!user) { alert("Nicht angemeldet."); return; }
+
+  if (!confirm(
+    "Willst du dein Konto wirklich unwiderruflich löschen?\n\n" +
+    "• Alle deine Daten (Profil, Bexio-Verbindung, Bot-Sessions) werden entfernt.\n" +
+    "• Ein aktives Abo wird sofort bei Stripe gekündigt.\n" +
+    "• Diese Aktion kann nicht rückgängig gemacht werden."
+  )) return;
+
+  var typed = prompt('Zum Bestätigen bitte LÖSCHEN eingeben:');
+  if (typed === null) return;
+  if (String(typed).trim().toUpperCase() !== "LÖSCHEN") {
+    alert("Abgebrochen — du musst \"LÖSCHEN\" eingeben.");
+    return;
+  }
+
+  var btn = document.getElementById("delete-account-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Lösche..."; }
+
+  try {
+    var sessionResult = await supabase.auth.getSession();
+    var accessToken = sessionResult.data.session
+      ? sessionResult.data.session.access_token
+      : SUPABASE_ANON_KEY;
+
+    var resp = await fetch(
+      SUPABASE_URL + "/functions/v1/delete-account",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": "Bearer " + accessToken,
+        },
+        body: JSON.stringify({}),
+      },
+    );
+
+    if (!resp.ok) {
+      var errBody = await resp.text();
+      console.error("[deleteAccount] not ok:", resp.status, errBody);
+      alert("Löschung fehlgeschlagen (" + resp.status + "): " + errBody);
+      if (btn) { btn.disabled = false; btn.textContent = "Konto unwiderruflich löschen"; }
+      return;
+    }
+  } catch (err) {
+    console.error("[deleteAccount] network error:", err);
+    alert("Netzwerkfehler: " + (err && err.message ? err.message : err));
+    if (btn) { btn.disabled = false; btn.textContent = "Konto unwiderruflich löschen"; }
+    return;
+  }
+
+  // Success — drop the local session and redirect. The hash is picked up
+  // by login.html to show the "Konto gelöscht" banner.
+  try { await supabase.auth.signOut(); } catch (_e) { /* ignore — auth user is gone anyway */ }
+  window.location.href = "login.html#deleted";
+}
+
 // ----- Helpers used by renderSubscriptionCard -----
 
 function subRow(label, value) {

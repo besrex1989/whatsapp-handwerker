@@ -12,6 +12,13 @@
     <div class="auth-card">
       <a href="/" class="logo">Whats<span>Bill</span></a>
 
+      <!-- Shown after a successful account deletion (set by auth.js on
+           the #deleted URL hash). -->
+      <div id="deleted-banner" class="auth-success" style="display: none;">
+        Dein Konto wurde gelöscht. Wir haben alle deine Daten entfernt.
+        Schade, dass du gehst — bis zum nächsten Mal!
+      </div>
+
       <!-- Login Form -->
       <div id="login-form">
         <h2>Anmelden</h2>
