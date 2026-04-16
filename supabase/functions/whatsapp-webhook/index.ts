@@ -114,7 +114,51 @@ Deno.serve(async (req: Request) => {
           .eq("id", session.tenant_id)
           .single();
         tenant = tenantResp.data;
-      } else {
+
+        // Isolations-Guard: wenn die Sender-Nummer nicht (mehr) zum
+        // gecachten Tenant passt — weil der Tenant zwischenzeitlich
+        // seine WhatsApp-Nummer geändert hat, oder diese Nummer inzwischen
+        // einem anderen Tenant gehört — verwerfen wir den gecachten
+        // tenant_id UND den gesamten Chat-State der Session, bevor wir
+        // unten eine frische Lookup-per-Phone machen. Ohne diesen Check
+        // könnte im 8h-expires_at-Fenster ein neuer Inhaber einer
+        // vormals genutzten Nummer fremden Session-State sehen.
+        if (tenant) {
+          var tenantDigits = String(tenant.whatsapp_number || "").replace(/\D/g, "");
+          var senderDigits = phone.replace(/\D/g, "");
+          if (tenantDigits !== senderDigits) {
+            console.warn(
+              "[WhatsApp] session/tenant phone mismatch — resetting. sender=" +
+              phone + " session_tenant_number=" + tenant.whatsapp_number,
+            );
+            await supabase
+              .from("sessions_handwerker")
+              .update({
+                tenant_id: null,
+                step: "start",
+                contact_data: null,
+                bexio_contact_id: null,
+                bexio_invoice_id: null,
+                bexio_invoice_nr: null,
+                invoice_title: null,
+                invoice_data: null,
+                manual_positions: null,
+                current_position_desc: null,
+                current_position_price: null,
+                receipt_data: null,
+                receipt_base64: null,
+                receipt_type: null,
+                search_results: null,
+              })
+              .eq("id", session.id);
+            session.tenant_id = null;
+            session.step = "start";
+            tenant = null;
+          }
+        }
+      }
+
+      if (!tenant) {
         // Try multiple phone formats: +41xxx, whatsapp:+41xxx, 41xxx
         var phoneClean = phone.replace("+", "");
         var lookup = await supabase
