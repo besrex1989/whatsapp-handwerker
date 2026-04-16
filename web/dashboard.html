@@ -125,6 +125,27 @@
           </ol>
         </div>
 
+        <!-- Gefahrenzone / Konto löschen -->
+        <div class="dash-card danger-zone">
+          <h3>Gefahrenzone</h3>
+          <p class="help-text" style="margin-top: 0;">
+            Wenn du dein Konto löschst, entfernen wir <strong>alle deine Daten
+            unwiderruflich</strong>: Profil, Bexio-Verbindung und offene
+            Bot-Sessions. Ein aktives Abo wird sofort bei Stripe gekündigt
+            (keine Rückerstattung für den laufenden Abrechnungszeitraum).
+          </p>
+          <p class="help-text">
+            Deine bei Bexio gespeicherten Rechnungen und Offerten bleiben
+            selbstverständlich erhalten – die liegen in deinem Bexio-Konto,
+            nicht bei uns.
+          </p>
+          <div class="dash-actions">
+            <button id="delete-account-btn" class="btn btn-danger" onclick="deleteAccount()">
+              Konto unwiderruflich löschen
+            </button>
+          </div>
+        </div>
+
         <!-- FAQ -->
         <div class="dash-card">
           <h3>Häufige Fragen</h3>

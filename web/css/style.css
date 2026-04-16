@@ -1101,6 +1101,32 @@ body {
   font-size: 13px;
 }
 
+/* ===== Danger zone (account deletion) ===== */
+.dash-card.danger-zone {
+  border-color: #fecaca;
+  background: #fffbfb;
+}
+
+.dash-card.danger-zone h3 {
+  color: #b91c1c;
+}
+
+.btn.btn-danger {
+  background: #b91c1c;
+  color: #fff;
+  border: 1px solid #b91c1c;
+}
+
+.btn.btn-danger:hover {
+  background: #991b1b;
+  border-color: #991b1b;
+}
+
+.btn.btn-danger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 768px) {
   .hero {

@@ -79,6 +79,20 @@ async function checkAuth() {
 // Run auth check on page load
 checkAuth();
 
+// Show the "Konto gelöscht" banner on login.html after a successful
+// account deletion. The deleteAccount() handler on the dashboard sets
+// the #deleted hash before redirecting here. We strip the hash again
+// so a refresh doesn't keep showing the banner.
+if (window.location.hash === "#deleted") {
+  window.addEventListener("DOMContentLoaded", function () {
+    var el = document.getElementById("deleted-banner");
+    if (el) el.style.display = "block";
+    try {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+    } catch (_e) { /* older browsers — fine, hash stays */ }
+  });
+}
+
 // Check if URL has #register hash
 if (window.location.hash === "#register") {
   var registerForm = document.getElementById("register-form");
