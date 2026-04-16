@@ -61,15 +61,18 @@ SUPPORT.md                 # Support-Playbook
 
 ## Deploy-Flow (wichtig!)
 
+Der Default-Branch heißt **`claude/review-and-test-ni1MX`** (historisch
+gewachsen, nicht `main`). Alles was dorthin gepusht wird, geht live.
+
 | Änderung | Auto-Deploy? | Via |
 |---|---|---|
-| `web/**` | ✅ | Vercel (Push auf `main`) |
-| `supabase/functions/**` | ✅ | `deploy-functions.yml` (Push auf `main`) |
-| `supabase/migrations/**` | ✅ | `deploy-migrations.yml` (Push auf `main`) |
+| `web/**` | ✅ | Vercel (Push auf Default-Branch) |
+| `supabase/functions/**` | ✅ | `deploy-functions.yml` |
+| `supabase/migrations/**` | ✅ | `deploy-migrations.yml` |
 | Stripe-Produkte/Preise | ❌ | Manuell im Stripe Dashboard |
 | Meta WhatsApp Templates | ❌ | Manuell im Meta Business Manager |
 
-**Alles was nach `main` gepusht wird, geht sofort live.** Keine
+**Alles was in den Default-Branch gepusht wird, geht sofort live.** Keine
 Staging-Umgebung. Entsprechend vorsichtig reviewen.
 
 Preview-Deploys auf Feature-Branches gibt's für **Vercel** (Frontend),

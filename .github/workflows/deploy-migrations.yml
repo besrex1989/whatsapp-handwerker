@@ -3,9 +3,12 @@ name: Deploy Supabase Migrations
 on:
   # Manual runs from the Actions tab.
   workflow_dispatch: {}
-  # Auto-run whenever a new migration lands on main.
+  # Auto-run whenever a new migration lands on the production branch.
+  # Mirrors the branch list in deploy-functions.yml so functions and DB
+  # stay in lockstep.
   push:
     branches:
+      - claude/review-and-test-ni1MX
       - main
     paths:
       - 'supabase/migrations/**'
