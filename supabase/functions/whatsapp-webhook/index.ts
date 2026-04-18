@@ -145,6 +145,7 @@ Deno.serve(async (req: Request) => {
                 manual_positions: null,
                 current_position_desc: null,
                 current_position_price: null,
+                current_article_id: null,
                 receipt_data: null,
                 receipt_base64: null,
                 receipt_type: null,
@@ -397,11 +398,8 @@ Deno.serve(async (req: Request) => {
             bexio_invoice_id: draftId,
             invoice_title: selectedDraft.title || selectDocLabel,
             invoice_data: { document_nr: selectedDraft.document_nr, total: selectedDraft.total },
-            step: "draft_position_desc", updated_at: new Date().toISOString(),
+            step: "draft_position_mode", updated_at: new Date().toISOString(),
           }).eq("id", session.id);
-          // Fetch the full document so we can list existing positions.
-          // The search result only contains header fields — positions live
-          // on the detail endpoint.
           var existingPositionsText = "";
           try {
             var fullDraft = await bexioGetDocument(tenant, draftId, selectDocType);
@@ -430,14 +428,130 @@ Deno.serve(async (req: Request) => {
             "Nr: " + (selectedDraft.document_nr || "-") + "\n" +
             "Titel: " + (selectedDraft.title || "-") + "\n" +
             "Aktuelles Total: CHF " + (selectedDraft.total || "0") + "\n" +
-            existingPositionsText + "\n" +
-            "Beschreibe die neue Position:"
+            existingPositionsText
           );
+          await sendButtons(from, "Wie möchtest du die Position erfassen?", [
+            { id: "mode_manual", title: "Manuell eingeben" },
+            { id: "mode_product", title: "Produkt wählen" },
+          ]);
         } else {
           await sendText(from, "Entwurf nicht gefunden. Bitte wähle aus der Liste.");
         }
       } else {
         await sendText(from, "Bitte wähle einen Entwurf aus der Liste.");
+      }
+
+    } else if (step === "draft_position_mode") {
+      if (choice === "mode_manual" || text === "manuell") {
+        await updateStep(session.id, "draft_position_desc");
+        await sendText(from, "Beschreibe die Position:");
+      } else if (choice === "mode_product" || text === "produkt") {
+        if (!tenant || !tenant.bexio_access_token) {
+          await sendText(from, "Bexio nicht verbunden — bitte manuell erfassen.");
+          await updateStep(session.id, "draft_position_desc");
+          await sendText(from, "Beschreibe die Position:");
+        } else {
+          try {
+            var dpmArticles = await bexioListArticles(tenant);
+            if (dpmArticles.length === 0) {
+              await sendText(from, "Keine Produkte in Bexio hinterlegt. Bitte manuell erfassen.");
+              await updateStep(session.id, "draft_position_desc");
+              await sendText(from, "Beschreibe die Position:");
+            } else {
+              await supabase.from("sessions_handwerker").update({
+                search_results: dpmArticles.slice(0, 200),
+                step: "draft_product_select", updated_at: new Date().toISOString(),
+              }).eq("id", session.id);
+              var dpmRows = dpmArticles.slice(0, 10).map(function (a: any) {
+                return {
+                  id: "article_" + a.id,
+                  title: String(a.intern_name || "Artikel").slice(0, 24),
+                  description: "CHF " + (Number(a.sale_price) || 0).toFixed(2) +
+                    (a.intern_code ? " | " + a.intern_code : ""),
+                };
+              });
+              var dpmBody = dpmArticles.length + " Produkt(e) verfügbar:";
+              if (dpmArticles.length > 10) {
+                dpmBody += "\n(Zeige erste 10 von " + dpmArticles.length + ")";
+              }
+              await sendList(from, dpmBody, "Produkt wählen", [
+                { title: "Produkte", rows: dpmRows },
+              ]);
+            }
+          } catch (dpmErr) {
+            console.error("[Draft Product List] Error:", dpmErr);
+            await sendText(from, "Fehler beim Laden der Produkte. Bitte manuell erfassen.");
+            await updateStep(session.id, "draft_position_desc");
+            await sendText(from, "Beschreibe die Position:");
+          }
+        }
+      } else {
+        await sendButtons(from, "Wie möchtest du die Position erfassen?", [
+          { id: "mode_manual", title: "Manuell eingeben" },
+          { id: "mode_product", title: "Produkt wählen" },
+        ]);
+      }
+
+    } else if (step === "draft_product_select") {
+      var dpsMatch = (listId || buttonId || text).match(/^article_(\d+)$/);
+      if (dpsMatch) {
+        var dpsArtId = parseInt(dpsMatch[1], 10);
+        var dpsArticles = (session.search_results || []) as any[];
+        var dpsSelected = dpsArticles.find(function (a: any) { return a.id === dpsArtId; });
+        if (!dpsSelected) {
+          await sendText(from, "Produkt nicht gefunden. Bitte nochmal wählen.");
+        } else {
+          var dpsPrice = Number(dpsSelected.sale_price) || 0;
+          var dpsName = dpsSelected.intern_name || "Artikel";
+          await supabase.from("sessions_handwerker").update({
+            current_article_id: dpsArtId,
+            current_position_desc: dpsName,
+            current_position_price: dpsPrice,
+            step: "draft_product_amount", updated_at: new Date().toISOString(),
+          }).eq("id", session.id);
+          await sendText(from,
+            "Produkt: *" + dpsName + "*\n" +
+            "Preis: CHF " + dpsPrice.toFixed(2) + "\n\n" +
+            "Wie viele? (z.B. *5*, *2.5*, *1*)"
+          );
+        }
+      } else {
+        await sendText(from, "Bitte wähle ein Produkt aus der Liste.");
+      }
+
+    } else if (step === "draft_product_amount") {
+      var dpaText = msgBody.replace("'", "").replace(",", ".");
+      var dpaAmt = parseFloat(dpaText);
+      var dpaDocType: DocType = (session.bexio_document_type === "offer") ? "offer" : "invoice";
+      if (isNaN(dpaAmt) || dpaAmt <= 0) {
+        await sendText(from, "Bitte gib eine gültige Menge ein (z.B. 5, 2.5, 1).");
+      } else if (!tenant || !session.bexio_invoice_id || !session.current_article_id) {
+        await sendText(from, "Fehler: Entwurf oder Produkt nicht ausgewählt.");
+      } else {
+        try {
+          await sendText(from, "Position wird hinzugefügt...");
+          await bexioAddDocumentArticlePosition(
+            tenant, session.bexio_invoice_id, dpaDocType,
+            session.current_article_id, dpaAmt
+          );
+          var dpaUpdated = await bexioGetDocument(tenant, session.bexio_invoice_id, dpaDocType);
+          await supabase.from("sessions_handwerker").update({
+            current_article_id: null, current_position_desc: null,
+            current_position_price: null, current_position_amount: null,
+            current_position_unit: null,
+            step: "draft_position_more", updated_at: new Date().toISOString(),
+          }).eq("id", session.id);
+          await sendButtons(from,
+            "Position hinzugefügt!\n\nNeues Total: CHF " + (dpaUpdated.total || "0"),
+            [
+              { id: "add_more_draft", title: "Weitere Position" },
+              { id: "finish_draft", title: "Fertig" },
+            ]
+          );
+        } catch (dpaErr) {
+          console.error("[Draft Add Article Position] Error:", dpaErr);
+          await sendText(from, "Fehler beim Hinzufügen: " + String(dpaErr).slice(0, 200));
+        }
       }
 
     } else if (step === "draft_position_desc") {
@@ -514,8 +628,11 @@ Deno.serve(async (req: Request) => {
 
     } else if (step === "draft_position_more") {
       if (choice === "add_more_draft" || text === "ja" || text === "weitere") {
-        await updateStep(session.id, "draft_position_desc");
-        await sendText(from, "Beschreibe die nächste Position:");
+        await updateStep(session.id, "draft_position_mode");
+        await sendButtons(from, "Wie möchtest du die nächste Position erfassen?", [
+          { id: "mode_manual", title: "Manuell eingeben" },
+          { id: "mode_product", title: "Produkt wählen" },
+        ]);
       } else if (choice === "finish_draft" || text === "fertig" || text === "nein") {
         await sendText(from, "Fertig! Der Entwurf wurde aktualisiert. Du findest ihn in Bexio.");
         // Send the updated PDF as a preview before closing the session.
@@ -701,9 +818,129 @@ Deno.serve(async (req: Request) => {
         await sendText(from, "Bitte gib einen Titel für " + (titleDocType === "offer" ? "das Angebot" : "die Rechnung") + " ein.");
       } else {
         await supabase.from("sessions_handwerker").update({
-          invoice_title: msgBody, step: "position_desc", updated_at: new Date().toISOString(),
+          invoice_title: msgBody, step: "position_mode", updated_at: new Date().toISOString(),
         }).eq("id", session.id);
-        await sendText(from, "Titel: *" + msgBody + "*\n\nJetzt die Positionen.\nBeschreibe die erste Position:");
+        await sendText(from, "Titel: *" + msgBody + "*\n\nJetzt die Positionen.");
+        await sendButtons(from, "Wie möchtest du die Position erfassen?", [
+          { id: "mode_manual", title: "Manuell eingeben" },
+          { id: "mode_product", title: "Produkt wählen" },
+        ]);
+      }
+
+    } else if (step === "position_mode") {
+      if (choice === "mode_manual" || text === "manuell") {
+        await updateStep(session.id, "position_desc");
+        await sendText(from, "Beschreibe die Position:");
+      } else if (choice === "mode_product" || text === "produkt") {
+        if (!tenant || !tenant.bexio_access_token) {
+          await sendText(from, "Bexio nicht verbunden — bitte manuell erfassen.");
+          await updateStep(session.id, "position_desc");
+          await sendText(from, "Beschreibe die Position:");
+        } else {
+          try {
+            var pmArticles = await bexioListArticles(tenant);
+            if (pmArticles.length === 0) {
+              await sendText(from, "Keine Produkte in Bexio hinterlegt. Bitte manuell erfassen.");
+              await updateStep(session.id, "position_desc");
+              await sendText(from, "Beschreibe die Position:");
+            } else {
+              await supabase.from("sessions_handwerker").update({
+                search_results: pmArticles.slice(0, 200),
+                step: "product_select", updated_at: new Date().toISOString(),
+              }).eq("id", session.id);
+              var pmRows = pmArticles.slice(0, 10).map(function (a: any) {
+                return {
+                  id: "article_" + a.id,
+                  title: String(a.intern_name || "Artikel").slice(0, 24),
+                  description: "CHF " + (Number(a.sale_price) || 0).toFixed(2) +
+                    (a.intern_code ? " | " + a.intern_code : ""),
+                };
+              });
+              var pmBody = pmArticles.length + " Produkt(e) verfügbar:";
+              if (pmArticles.length > 10) {
+                pmBody += "\n(Zeige erste 10 von " + pmArticles.length + ")";
+              }
+              await sendList(from, pmBody, "Produkt wählen", [
+                { title: "Produkte", rows: pmRows },
+              ]);
+            }
+          } catch (pmErr) {
+            console.error("[Product List] Error:", pmErr);
+            await sendText(from, "Fehler beim Laden der Produkte. Bitte manuell erfassen.");
+            await updateStep(session.id, "position_desc");
+            await sendText(from, "Beschreibe die Position:");
+          }
+        }
+      } else {
+        await sendButtons(from, "Wie möchtest du die Position erfassen?", [
+          { id: "mode_manual", title: "Manuell eingeben" },
+          { id: "mode_product", title: "Produkt wählen" },
+        ]);
+      }
+
+    } else if (step === "product_select") {
+      var psMatch = (listId || buttonId || text).match(/^article_(\d+)$/);
+      if (psMatch) {
+        var psArtId = parseInt(psMatch[1], 10);
+        var psArticles = (session.search_results || []) as any[];
+        var psSelected = psArticles.find(function (a: any) { return a.id === psArtId; });
+        if (!psSelected) {
+          await sendText(from, "Produkt nicht gefunden. Bitte nochmal wählen.");
+        } else {
+          var psPrice = Number(psSelected.sale_price) || 0;
+          var psName = psSelected.intern_name || "Artikel";
+          await supabase.from("sessions_handwerker").update({
+            current_article_id: psArtId,
+            current_position_desc: psName,
+            current_position_price: psPrice,
+            step: "product_amount", updated_at: new Date().toISOString(),
+          }).eq("id", session.id);
+          await sendText(from,
+            "Produkt: *" + psName + "*\n" +
+            "Preis: CHF " + psPrice.toFixed(2) + "\n\n" +
+            "Wie viele? (z.B. *5*, *2.5*, *1*)"
+          );
+        }
+      } else {
+        await sendText(from, "Bitte wähle ein Produkt aus der Liste.");
+      }
+
+    } else if (step === "product_amount") {
+      var paText = msgBody.replace("'", "").replace(",", ".");
+      var paAmt = parseFloat(paText);
+      if (isNaN(paAmt) || paAmt <= 0) {
+        await sendText(from, "Bitte gib eine gültige Menge ein (z.B. 5, 2.5, 1).");
+      } else {
+        var paPrice = typeof session.current_position_price === "number"
+          ? session.current_position_price
+          : parseFloat(session.current_position_price || "0");
+        var paLineTotal = Math.round(paAmt * paPrice * 100) / 100;
+        var paPositions = session.manual_positions || [];
+        paPositions.push({
+          article_id: session.current_article_id,
+          description: session.current_position_desc || "",
+          amount: paAmt, unit: "", price: paPrice, total: paLineTotal,
+        });
+        var paTotal = paPositions.reduce(function (s: number, p: any) {
+          var lt = typeof p.total === "number" ? p.total : (p.amount || 1) * (p.price || 0);
+          return s + lt;
+        }, 0);
+        await supabase.from("sessions_handwerker").update({
+          manual_positions: paPositions,
+          current_article_id: null, current_position_desc: null,
+          current_position_price: null, current_position_amount: null,
+          current_position_unit: null,
+          step: "position_more", updated_at: new Date().toISOString(),
+        }).eq("id", session.id);
+        var paDocType: DocType = (session.bexio_document_type === "offer") ? "offer" : "invoice";
+        var paDocLabel = docLabel(paDocType);
+        await sendButtons(from,
+          "Position hinzugefügt!\n\nPositionen: " + paPositions.length + "\nTotal: CHF " + paTotal.toFixed(2),
+          [
+            { id: "add_more", title: "Weitere Position" },
+            { id: "finish", title: paDocLabel + " erstellen" },
+          ]
+        );
       }
 
     } else if (step === "position_desc") {
@@ -780,8 +1017,11 @@ Deno.serve(async (req: Request) => {
       var morePosDocType: DocType = (session.bexio_document_type === "offer") ? "offer" : "invoice";
       var morePosDocLabel = docLabel(morePosDocType);
       if (choice === "add_more" || text === "ja" || text === "weitere") {
-        await updateStep(session.id, "position_desc");
-        await sendText(from, "Beschreibe die nächste Position:");
+        await updateStep(session.id, "position_mode");
+        await sendButtons(from, "Wie möchtest du die nächste Position erfassen?", [
+          { id: "mode_manual", title: "Manuell eingeben" },
+          { id: "mode_product", title: "Produkt wählen" },
+        ]);
       } else if (choice === "finish" || text === "fertig" || text === "nein" || text === "erstellen") {
         var positions2 = session.manual_positions || [];
         var total2 = positions2.reduce(function (s: number, p: any) {
@@ -979,6 +1219,7 @@ async function resetSession(sessionId: string): Promise<void> {
     bexio_document_type: "invoice",
     current_position_desc: null, current_position_price: null,
     current_position_amount: null, current_position_unit: null,
+    current_article_id: null,
     receipt_data: null,
     receipt_base64: null, receipt_type: null, search_results: null,
     expires_at: expiresAt, updated_at: new Date().toISOString(),
@@ -1388,8 +1629,13 @@ async function bexioCreateDocument(
     var positionItems = params.positions.map(function (p: any) {
       var amt = typeof p.amount === "number" ? p.amount : parseFloat(p.amount || "1");
       if (isNaN(amt) || amt <= 0) amt = 1;
-      // Embed the unit in the position text so it appears on the printed
-      // document. Proper unit_id lookup via /2.0/unit could come later.
+      if (p.article_id) {
+        return {
+          type: "KbPositionArticle",
+          article_id: p.article_id,
+          amount: String(amt),
+        };
+      }
       var txt = p.description || "";
       if (p.unit) txt = txt + " (" + p.unit + ")";
       var pos: any = {
@@ -1489,6 +1735,39 @@ async function bexioCreateDocument(
 
   console.error("[Bexio] " + label + " create error after all attempts:", noTax.status, noTax.errText);
   throw new Error("Bexio " + label + " (" + noTax.status + "): " + noTax.errText.slice(0, 300));
+}
+
+async function bexioListArticles(tenant: any): Promise<any[]> {
+  var token = await getBexioToken(tenant);
+  var resp = await fetch("https://api.bexio.com/2.0/article?limit=200", {
+    headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+  });
+  if (!resp.ok) {
+    var errText = await resp.text();
+    throw new Error("Bexio Artikel (" + resp.status + "): " + errText.slice(0, 200));
+  }
+  return resp.json();
+}
+
+async function bexioAddDocumentArticlePosition(
+  tenant: any, docId: number, docType: DocType,
+  articleId: number, amount: number,
+): Promise<any> {
+  var token = await getBexioToken(tenant);
+  var endpoint = docEndpoint(docType);
+  var resp = await fetch(
+    "https://api.bexio.com/2.0/" + endpoint + "/" + docId + "/kb_position_article",
+    {
+      method: "POST",
+      headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ article_id: articleId, amount: String(amount) }),
+    }
+  );
+  if (!resp.ok) {
+    var errText = await resp.text();
+    throw new Error("Bexio Artikel-Position (" + resp.status + "): " + errText.slice(0, 200));
+  }
+  return resp.json();
 }
 
 async function bexioIssueDocument(tenant: any, docId: number, docType: DocType): Promise<void> {
