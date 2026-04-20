@@ -23,6 +23,14 @@
       <div id="login-form">
         <h2>Anmelden</h2>
         <div id="login-error" class="auth-error"></div>
+        <div id="resend-confirm" style="display: none; margin-bottom: 14px;">
+          <p style="color: var(--gray); font-size: 13px; margin-bottom: 8px;">
+            Deine E-Mail ist noch nicht bestätigt. Prüfe dein Postfach (auch Spam) oder lass dir die Mail erneut senden.
+          </p>
+          <button type="button" id="resend-btn" class="btn btn-outline" onclick="resendConfirmation()">
+            Bestätigungs-Mail erneut senden
+          </button>
+        </div>
         <form onsubmit="handleLogin(event)">
           <div class="form-group">
             <label for="login-email">E-Mail</label>
