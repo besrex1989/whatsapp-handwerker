@@ -156,10 +156,42 @@ async function handleLogin(e) {
     errorEl.style.display = "block";
     btn.textContent = "Anmelden";
     btn.disabled = false;
+
+    var resendEl = document.getElementById("resend-confirm");
+    if (resendEl) {
+      if (String(result.error.message || "").toLowerCase().indexOf("email not confirmed") >= 0) {
+        resendEl.style.display = "block";
+      } else {
+        resendEl.style.display = "none";
+      }
+    }
     return;
   }
 
   window.location.href = "dashboard.html";
+}
+
+// ===== Resend Confirmation Email =====
+async function resendConfirmation() {
+  var email = document.getElementById("login-email").value;
+  if (!email) { alert("Bitte E-Mail-Adresse eingeben."); return; }
+
+  var resendBtn = document.getElementById("resend-btn");
+  if (resendBtn) { resendBtn.disabled = true; resendBtn.textContent = "Wird gesendet..."; }
+
+  var result = await supabase.auth.resend({ type: "signup", email: email });
+
+  if (resendBtn) { resendBtn.disabled = false; resendBtn.textContent = "Erneut senden"; }
+
+  if (result.error) {
+    alert("Fehler: " + result.error.message);
+    return;
+  }
+
+  var resendEl = document.getElementById("resend-confirm");
+  if (resendEl) {
+    resendEl.innerHTML = '<p class="auth-success" style="display:block;">Bestätigungs-Mail wurde erneut gesendet. Bitte prüfe dein Postfach.</p>';
+  }
 }
 
 // ===== Forgot Password =====
