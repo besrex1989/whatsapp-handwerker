@@ -1,0 +1,33 @@
+# WhatsBill — whatsbill.ch
+
+> WhatsApp-first Rechnungs- und Angebots-Assistent für Schweizer KMU mit Bexio-Integration.
+
+## Was ist WhatsBill?
+WhatsBill ermöglicht es Schweizer Handwerkern, Treuhändern und KMU, Rechnungen und Angebote direkt per WhatsApp-Chat zu erstellen. Die Dokumente landen automatisch als Entwurf im Bexio-Konto des Nutzers.
+
+## Hauptfunktionen
+- Rechnungen und Angebote per WhatsApp erstellen
+- Automatische Bexio-Integration (Kontakte, Rechnungen, Angebote)
+- Entwürfe bearbeiten und Positionen ergänzen
+- PDF-Vorschau direkt auf WhatsApp
+- Produkte/Artikel aus dem Bexio-Katalog wählen
+- DSG-konform, Daten in der Schweiz gehostet
+
+## Preise
+- 14 Tage kostenlos testen (keine Kreditkarte nötig)
+- Monatlich: CHF 19/Monat
+- Jährlich: CHF 199/Jahr (spare 15%)
+
+## Zielgruppe
+Schweizer KMU, Handwerker, Treuhänder, Selbständige — alle die Bexio nutzen.
+
+## Kontakt
+Haus der Finanzen GmbH
+Freiburgstrasse 443, 3018 Bern, Schweiz
+E-Mail: info@whatsbill.ch
+Web: https://whatsbill.ch
+
+## Weitere Informationen
+- Datenschutz: https://whatsbill.ch/datenschutz.html
+- AGB: https://whatsbill.ch/agb.html
+- Impressum: https://whatsbill.ch/impressum.html
