@@ -1,0 +1,20 @@
+/* whatsbill.ch */
+
+/* TEAM */
+Developed by: Haus der Finanzen GmbH
+Location: Bern, Switzerland
+Contact: info@whatsbill.ch
+
+/* TECHNOLOGY */
+Frontend: Vanilla JS, HTML, CSS
+Backend: Supabase Edge Functions (Deno)
+Database: Supabase Postgres
+Payments: Stripe
+Messaging: WhatsApp Business Cloud API
+Accounting: Bexio API
+Hosting: Vercel
+
+/* SITE */
+Last update: 2026-04-22
+Language: German (de-CH)
+Standards: HTML5, CSS3, ES6

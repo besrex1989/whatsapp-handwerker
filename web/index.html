@@ -1,10 +1,194 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de-CH">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WhatsBill — Rechnungen & Angebote per WhatsApp</title>
+  <title>WhatsBill — Rechnungen & Angebote per WhatsApp in Bexio erstellen</title>
+  <meta name="description" content="Erstelle Rechnungen und Angebote in Bexio direkt per WhatsApp. Für Schweizer KMU, Handwerker und Treuhänder. 14 Tage gratis, ab CHF 19/Mt.">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <link rel="canonical" href="https://whatsbill.ch/">
+  <meta name="theme-color" content="#25D366">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="/site.webmanifest">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/icon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="de_CH">
+  <meta property="og:site_name" content="WhatsBill">
+  <meta property="og:title" content="WhatsBill — Rechnungen & Angebote per WhatsApp in Bexio">
+  <meta property="og:description" content="Erstelle Rechnungen und Angebote in Bexio direkt per WhatsApp-Chat. Für Schweizer KMU, Handwerker und Treuhänder.">
+  <meta property="og:url" content="https://whatsbill.ch/">
+  <meta property="og:image" content="https://whatsbill.ch/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="WhatsBill — Rechnungen & Angebote per WhatsApp">
+  <meta name="twitter:description" content="Bexio-Rechnungen und Angebote per WhatsApp erstellen. Für Schweizer KMU.">
+  <meta name="twitter:image" content="https://whatsbill.ch/og-image.png">
+
+  <!-- Hreflang -->
+  <link rel="alternate" hreflang="de-CH" href="https://whatsbill.ch/">
+  <link rel="alternate" hreflang="x-default" href="https://whatsbill.ch/">
+
+  <!-- Search Console / Webmaster verification (replace content values) -->
+  <meta name="google-site-verification" content="GOOGLE_VERIFICATION_CODE_HERE">
+  <meta name="msvalidate.01" content="BING_VERIFICATION_CODE_HERE">
+
   <link rel="stylesheet" href="css/style.css">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "WhatsBill",
+    "url": "https://whatsbill.ch",
+    "logo": "https://whatsbill.ch/og-image.png",
+    "description": "WhatsApp-first Rechnungs- und Angebots-Assistent für Schweizer KMU mit Bexio-Integration.",
+    "parentOrganization": {
+      "@type": "Organization",
+      "name": "Haus der Finanzen GmbH",
+      "url": "https://hdf.ch"
+    },
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "Freiburgstrasse 443",
+      "addressLocality": "Bern",
+      "postalCode": "3018",
+      "addressCountry": "CH"
+    },
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "email": "info@whatsbill.ch",
+      "contactType": "customer service",
+      "availableLanguage": "German"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "WhatsBill",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "WhatsApp (iOS, Android, Web)",
+    "description": "Rechnungen und Angebote in Bexio direkt per WhatsApp erstellen. Für Schweizer KMU, Handwerker und Treuhänder.",
+    "url": "https://whatsbill.ch",
+    "offers": [
+      {
+        "@type": "Offer",
+        "name": "Monatlich",
+        "price": "19.00",
+        "priceCurrency": "CHF",
+        "billingDuration": "P1M",
+        "priceValidUntil": "2027-12-31"
+      },
+      {
+        "@type": "Offer",
+        "name": "Jährlich",
+        "price": "199.00",
+        "priceCurrency": "CHF",
+        "billingDuration": "P1Y",
+        "priceValidUntil": "2027-12-31"
+      }
+    ],
+    "featureList": [
+      "Rechnungen per WhatsApp erstellen",
+      "Angebote per WhatsApp erstellen",
+      "Bexio-Integration (OAuth)",
+      "Kontakte automatisch anlegen",
+      "Entwürfe bearbeiten",
+      "PDF-Vorschau per WhatsApp",
+      "Produkte aus Bexio-Katalog wählen",
+      "DSG-konform"
+    ]
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Brauche ich ein Bexio-Konto für WhatsBill?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Ja. WhatsBill ist eine Erweiterung zu Bexio — wir erstellen Rechnungen und Angebote direkt in deinem Bexio-Konto. Ohne Bexio-Abo funktioniert der Dienst nicht."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Muss ich eine App installieren?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Nein. Der Bot läuft direkt in WhatsApp. Du speicherst einfach die Bot-Nummer als Kontakt und chattest wie mit einer Person."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Wie verbinde ich mein Bexio-Konto?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Nach der Registrierung klickst du im Dashboard auf Bexio verbinden. Du wirst auf Bexio weitergeleitet und autorisierst WhatsBill per OAuth — wir speichern niemals dein Bexio-Passwort."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Was kostet WhatsBill?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "14 Tage kostenlos ohne Kreditkarte. Danach CHF 19 pro Monat oder CHF 199 pro Jahr (entspricht CHF 16.60 pro Monat). Keine Einrichtungsgebühr, jederzeit kündbar."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Kann ich jederzeit kündigen?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Ja. Im Dashboard unter Abonnement kannst du jederzeit auf das Ende der laufenden Periode kündigen. Es gibt keine Mindestlaufzeit und keine versteckten Klauseln."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Wie sicher sind meine Daten bei WhatsBill?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Alle Verbindungen laufen verschlüsselt (TLS). Bexio-Tokens werden verschlüsselt gespeichert. Wir setzen keine Tracking-Cookies, keine Werbung, keine Weitergabe an Dritte."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Kann ich Entwürfe in Bexio bearbeiten?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Du kannst alle Dokumente bearbeiten, die noch als Entwurf in Bexio liegen — weitere Positionen hinzufügen oder den Kunden ändern."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Funktioniert WhatsBill mit mehreren Mitarbeitenden?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Pro Konto ist aktuell eine WhatsApp-Nummer hinterlegt. Für Teams mit mehreren Handy-Nummern kontaktiere uns — wir planen ein Team-Abo."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Wo bekomme ich Hilfe bei WhatsBill?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Schreib uns an info@whatsbill.ch — wir antworten in der Regel innerhalb eines Arbeitstages."
+        }
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
 
@@ -151,6 +335,82 @@
           </ul>
           <a href="login.html#register" class="btn btn-primary btn-block">Starten</a>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Use Cases -->
+  <section class="use-cases">
+    <div class="container">
+      <h2 class="section-title">Für wen ist WhatsBill gemacht?</h2>
+      <p class="section-subtitle">Überall dort, wo Rechnungen und Angebote schnell erstellt werden müssen — unterwegs, auf der Baustelle, beim Kunden.</p>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">&#128736;</div>
+          <h3>Handwerker &amp; Monteure</h3>
+          <p>Rechnung direkt nach dem Einsatz erstellen, noch bevor du ins Büro fährst. Positionen, Stunden und Material per Chat erfassen — das Dokument landet automatisch in Bexio.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#128200;</div>
+          <h3>Treuhänder &amp; Buchhalter</h3>
+          <p>Angebote und Rechnungen für Mandanten schnell erstellen, ohne Bexio am Desktop zu öffnen. Ideal für kurze Aufträge und wiederkehrende Leistungen.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#127968;</div>
+          <h3>Selbständige &amp; Kleinunternehmen</h3>
+          <p>Du arbeitest allein und hast kein Sekretariat? Mit WhatsBill erstellst du professionelle Rechnungen in unter 2 Minuten — direkt vom Handy.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison -->
+  <section class="comparison">
+    <div class="container">
+      <h2 class="section-title">WhatsBill vs. manuelle Erfassung in Bexio</h2>
+      <p class="section-subtitle">Was du mit WhatsBill sparst — bei jeder einzelnen Rechnung.</p>
+      <div class="comparison-table-wrap">
+        <table class="comparison-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Manuell in Bexio</th>
+              <th>Mit WhatsBill</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Zeitaufwand pro Rechnung</td>
+              <td>5&ndash;10 Minuten am Desktop</td>
+              <td><strong>Unter 2 Minuten per Chat</strong></td>
+            </tr>
+            <tr>
+              <td>Geräteabhängig</td>
+              <td>Laptop / Desktop nötig</td>
+              <td><strong>Jedes Handy mit WhatsApp</strong></td>
+            </tr>
+            <tr>
+              <td>Kontakt anlegen</td>
+              <td>Manuell in Bexio-UI</td>
+              <td><strong>Bot fragt und legt an</strong></td>
+            </tr>
+            <tr>
+              <td>Unterwegs nutzbar</td>
+              <td>Nur mit Bexio-App</td>
+              <td><strong>Direkt in WhatsApp</strong></td>
+            </tr>
+            <tr>
+              <td>Produktkatalog</td>
+              <td>Manuell auswählen</td>
+              <td><strong>Per Liste im Chat auswählen</strong></td>
+            </tr>
+            <tr>
+              <td>PDF-Vorschau</td>
+              <td>In Bexio öffnen</td>
+              <td><strong>Direkt auf WhatsApp</strong></td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </section>

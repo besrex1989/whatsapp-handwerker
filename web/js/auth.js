@@ -179,7 +179,11 @@ async function resendConfirmation() {
   var resendBtn = document.getElementById("resend-btn");
   if (resendBtn) { resendBtn.disabled = true; resendBtn.textContent = "Wird gesendet..."; }
 
-  var result = await supabase.auth.resend({ type: "signup", email: email });
+  var result = await supabase.auth.resend({
+    type: "signup",
+    email: email,
+    options: { emailRedirectTo: window.location.origin + "/login.html" },
+  });
 
   if (resendBtn) { resendBtn.disabled = false; resendBtn.textContent = "Erneut senden"; }
 
@@ -266,6 +270,7 @@ async function handleRegister(e) {
         full_name: name,
         whatsapp_number: phone,
       },
+      emailRedirectTo: window.location.origin + "/login.html",
     },
   });
 

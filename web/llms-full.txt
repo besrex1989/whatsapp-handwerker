@@ -1,0 +1,98 @@
+# WhatsBill — whatsbill.ch
+
+> WhatsApp-first Rechnungs- und Angebots-Assistent für Schweizer KMU mit Bexio-Integration.
+
+## Was ist WhatsBill?
+WhatsBill ermöglicht es Schweizer Handwerkern, Treuhändern und KMU, Rechnungen und Angebote direkt per WhatsApp-Chat zu erstellen. Die Dokumente landen automatisch als Entwurf im Bexio-Konto des Nutzers.
+
+## Hauptfunktionen
+- Rechnungen und Angebote per WhatsApp erstellen
+- Automatische Bexio-Integration (Kontakte, Rechnungen, Angebote)
+- Entwürfe bearbeiten und Positionen ergänzen
+- PDF-Vorschau direkt auf WhatsApp
+- Produkte/Artikel aus dem Bexio-Katalog wählen
+- DSG-konform, Daten in der Schweiz gehostet
+
+### Detaillierte Funktionsbeschreibungen
+
+**Rechnungen und Angebote per WhatsApp erstellen**
+Schreiben Sie dem WhatsBill-Bot einfach eine WhatsApp-Nachricht mit den gewünschten Angaben — Kontaktname, Positionen, Beträge. Der Bot führt Sie Schritt für Schritt durch den Prozess und erstellt daraus ein fertiges Dokument. Kein Login, keine App, kein Browser nötig.
+
+**Automatische Bexio-Integration**
+WhatsBill verbindet sich direkt mit Ihrem Bexio-Konto per OAuth. Kontakte, Rechnungen und Angebote werden automatisch als Entwurf in Bexio erstellt. Sie behalten die volle Kontrolle und können alles in Bexio weiterbearbeiten.
+
+**Entwürfe bearbeiten und Positionen ergänzen**
+Bevor ein Dokument finalisiert wird, können Sie per WhatsApp Positionen hinzufügen, ändern oder entfernen. Der Bot zeigt Ihnen jederzeit eine Übersicht des aktuellen Entwurfs. So stellen Sie sicher, dass alles stimmt, bevor das Dokument in Bexio landet.
+
+**PDF-Vorschau direkt auf WhatsApp**
+Nach Erstellung erhalten Sie eine PDF-Vorschau des Dokuments direkt in Ihrem WhatsApp-Chat. So sehen Sie sofort, wie die Rechnung oder das Angebot aussieht, ohne Bexio öffnen zu müssen.
+
+**Produkte/Artikel aus dem Bexio-Katalog wählen**
+WhatsBill greift auf Ihren Bexio-Artikelkatalog zu. Statt Positionen manuell einzutippen, können Sie bestehende Produkte und Dienstleistungen direkt auswählen. Preise und Beschreibungen werden automatisch übernommen.
+
+**DSG-konform, Daten in der Schweiz gehostet**
+Alle Daten werden DSG-konform verarbeitet und in der Schweiz gehostet. Ihre Buchhaltungsdaten verlassen nie die Schweiz. Wir speichern keine Rechnungsinhalte dauerhaft — die Dokumente landen direkt in Ihrem Bexio-Konto.
+
+## So funktioniert WhatsBill
+
+1. **Registrieren**: Erstellen Sie ein Konto auf whatsbill.ch — kostenlos und in 30 Sekunden erledigt.
+2. **Bexio verbinden**: Verbinden Sie Ihr Bexio-Konto mit einem Klick über OAuth. WhatsBill erhält Zugriff auf Kontakte, Rechnungen und Angebote.
+3. **WhatsApp-Nachricht senden**: Schreiben Sie dem WhatsBill-Bot auf WhatsApp. Sagen Sie z.B. „Rechnung für Müller AG, 3 Stunden Beratung à 150 CHF".
+4. **Schritte folgen**: Der Bot fragt nach fehlenden Angaben (Kontakt, Positionen, MwSt.) und zeigt eine Zusammenfassung zur Bestätigung.
+5. **Dokument in Bexio**: Nach Ihrer Bestätigung erstellt WhatsBill den Entwurf in Bexio. Sie erhalten die PDF-Vorschau direkt auf WhatsApp.
+
+## Preise
+- 14 Tage kostenlos testen (keine Kreditkarte nötig)
+- Monatlich: CHF 19/Monat
+- Jährlich: CHF 199/Jahr (spare 15%)
+
+## Zielgruppe
+Schweizer KMU, Handwerker, Treuhänder, Selbständige — alle die Bexio nutzen.
+
+## Häufig gestellte Fragen (FAQ)
+
+**Brauche ich Bexio?**
+Ja, WhatsBill ist speziell für die Zusammenarbeit mit Bexio entwickelt. Sie benötigen ein aktives Bexio-Konto, um Rechnungen und Angebote erstellen zu können.
+
+**Muss ich eine App installieren?**
+Nein. WhatsBill funktioniert komplett über WhatsApp — die App, die Sie bereits haben. Für die Ersteinrichtung und Bexio-Verbindung nutzen Sie unser Web-Dashboard auf whatsbill.ch.
+
+**Wie verbinde ich Bexio?**
+Nach der Registrierung auf whatsbill.ch klicken Sie im Dashboard auf „Bexio verbinden". Sie werden zu Bexio weitergeleitet, wo Sie den Zugriff bestätigen. Danach ist alles automatisch eingerichtet.
+
+**Was kostet WhatsBill?**
+WhatsBill kostet CHF 19 pro Monat oder CHF 199 pro Jahr (spare 15%). Sie können 14 Tage kostenlos und ohne Kreditkarte testen.
+
+**Kann ich jederzeit kündigen?**
+Ja, Sie können Ihr Abo jederzeit über das Dashboard kündigen. Es gibt keine Mindestlaufzeit und keine versteckten Kosten. Nach der Kündigung läuft Ihr Abo bis zum Ende der bezahlten Periode weiter.
+
+**Sind meine Daten sicher?**
+Ja. Alle Daten werden DSG-konform verarbeitet und in der Schweiz gehostet. WhatsBill speichert keine Rechnungsinhalte dauerhaft — die Dokumente landen direkt in Ihrem Bexio-Konto. Die Verbindung zu Bexio erfolgt über OAuth mit verschlüsselter Übertragung.
+
+**Kann ich Entwürfe bearbeiten?**
+Ja. Solange ein Dokument noch nicht finalisiert ist, können Sie per WhatsApp Positionen hinzufügen, ändern oder entfernen. Nach der Erstellung in Bexio können Sie den Entwurf dort wie gewohnt weiterbearbeiten.
+
+**Geht das auch für Teams?**
+Aktuell ist WhatsBill für Einzelnutzer konzipiert — ein Bexio-Konto pro WhatsApp-Nummer. Team-Funktionen mit mehreren Nutzern pro Bexio-Konto sind in Planung.
+
+**Wo bekomme ich Hilfe?**
+Schreiben Sie uns eine E-Mail an info@whatsbill.ch oder kontaktieren Sie uns direkt per WhatsApp. Wir antworten in der Regel innerhalb weniger Stunden.
+
+## Technische Details
+- **Messaging**: WhatsApp Business Cloud API (Meta)
+- **Backend**: Supabase Edge Functions (Deno)
+- **Datenbank**: Supabase Postgres (Schweiz)
+- **Frontend**: Vanilla JS, HTML, CSS — gehostet auf Vercel
+- **Zahlungen**: Stripe (PCI-DSS-konform)
+- **Buchhaltung**: Bexio REST API mit OAuth 2.0
+
+## Kontakt
+Haus der Finanzen GmbH
+Freiburgstrasse 443, 3018 Bern, Schweiz
+E-Mail: info@whatsbill.ch
+Web: https://whatsbill.ch
+
+## Weitere Informationen
+- Datenschutz: https://whatsbill.ch/datenschutz.html
+- AGB: https://whatsbill.ch/agb.html
+- Impressum: https://whatsbill.ch/impressum.html
