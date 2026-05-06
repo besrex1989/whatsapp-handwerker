@@ -211,7 +211,7 @@ Deno.serve(async (req: Request) => {
     var text = msgBody.toLowerCase();
     var choice = buttonId || listId || text;
 
-    if (choice === "reset" || choice === "abbrechen" || choice === "neustart") {
+    if (choice === "reset" || choice === "abbrechen" || choice === "neustart" || choice === "restart") {
       await resetSession(session.id);
       await sendText(from, "Session zurückgesetzt. Schreibe etwas um neu zu starten.");
       return new Response("OK", { status: 200 });
@@ -233,57 +233,59 @@ Deno.serve(async (req: Request) => {
     var step = session.step || "start";
     var tenant = session.tenant_id ? await getTenant(session.tenant_id) : null;
 
-    if (step === "start") {
-      // AI shortcut: if the message is long enough and looks like a complete
-      // command ("Neue Rechnung für Müller: Beratung, 3h à 150.-"), try to
-      // parse it with Claude and offer a one-click confirmation instead of
-      // walking through the 5-step flow.
-      if (msgBody.length >= 20 && tenant && tenant.bexio_access_token && msgType === "text") {
-        try {
-          var aiParsed = await parseNaturalCommand(msgBody);
-          if (aiParsed && aiParsed.action && aiParsed.positions && aiParsed.positions.length > 0) {
-            await supabase.from("sessions_handwerker").update({
-              invoice_data: aiParsed,
-              bexio_document_type: aiParsed.action === "new_offer" ? "offer" : "invoice",
-              step: "ai_confirm",
-              updated_at: new Date().toISOString(),
-            }).eq("id", session.id);
-            var aiLabel = aiParsed.action === "new_offer" ? "Angebot"
-              : aiParsed.action === "add_position" ? "Position hinzufügen"
-              : "Rechnung";
-            var aiMsg = "*" + aiLabel + " erstellen?*\n\n";
-            if (aiParsed.contact_name) aiMsg += "Kunde: " + aiParsed.contact_name + "\n";
-            if (aiParsed.title) aiMsg += "Titel: " + aiParsed.title + "\n";
-            if (aiParsed.action === "add_position") {
-              aiMsg += "Entwurf: " + (aiParsed.draft_ref === "latest" ? "Letzter" : (aiParsed.draft_ref || "Letzter")) + "\n";
-            }
-            aiMsg += "\nPositionen:\n";
-            var aiTotal = 0;
-            for (var ai = 0; ai < aiParsed.positions.length; ai++) {
-              var ap = aiParsed.positions[ai];
-              var apAmt = Number(ap.amount) || 1;
-              var apPrice = Number(ap.price) || 0;
-              var apLine = apAmt * apPrice;
-              aiTotal += apLine;
-              var apUnit = ap.unit ? " " + ap.unit : "";
-              aiMsg += (ai + 1) + ". " + (ap.description || "");
-              if (apAmt !== 1 || ap.unit) {
-                aiMsg += " (" + apAmt + apUnit + " à CHF " + apPrice.toFixed(2) + ")";
-              }
-              aiMsg += " — CHF " + apLine.toFixed(2) + "\n";
-            }
-            aiMsg += "\n*Total: CHF " + aiTotal.toFixed(2) + "*";
-            await sendText(from, aiMsg);
-            await sendButtons(from, "Soll ich das so erfassen?", [
-              { id: "ai_confirm_yes", title: "Ja, erstellen" },
-              { id: "ai_confirm_no", title: "Abbrechen" },
-            ]);
-            return new Response("OK", { status: 200 });
+    // --- Global AI shortcut ---
+    // At any early step (start, main_menu, invoice_choice), if the user
+    // types a full natural-language command (>= 20 chars, not a button),
+    // try to parse it with Claude before entering the step-based flow.
+    var aiEarlySteps: Record<string, boolean> = { start: true, main_menu: true, invoice_choice: true };
+    if (aiEarlySteps[step] && msgBody.length >= 20 && tenant && tenant.bexio_access_token && msgType === "text" && !buttonId && !listId) {
+      try {
+        var globalAiParsed = await parseNaturalCommand(msgBody);
+        if (globalAiParsed && globalAiParsed.action && globalAiParsed.positions && globalAiParsed.positions.length > 0) {
+          await supabase.from("sessions_handwerker").update({
+            invoice_data: globalAiParsed,
+            bexio_document_type: globalAiParsed.action === "new_offer" ? "offer" : "invoice",
+            step: "ai_confirm",
+            updated_at: new Date().toISOString(),
+          }).eq("id", session.id);
+          var gAiLabel = globalAiParsed.action === "new_offer" ? "Angebot"
+            : globalAiParsed.action === "add_position" ? "Position hinzufügen"
+            : "Rechnung";
+          var gAiMsg = "*" + gAiLabel + " erstellen?*\n\n";
+          if (globalAiParsed.contact_name) gAiMsg += "Kunde: " + globalAiParsed.contact_name + "\n";
+          if (globalAiParsed.title) gAiMsg += "Titel: " + globalAiParsed.title + "\n";
+          if (globalAiParsed.action === "add_position") {
+            gAiMsg += "Entwurf: " + (globalAiParsed.draft_ref === "latest" ? "Letzter" : (globalAiParsed.draft_ref || "Letzter")) + "\n";
           }
-        } catch (aiParseErr) {
-          console.warn("[AI Parse] Error, falling through to menu:", aiParseErr);
+          gAiMsg += "\nPositionen:\n";
+          var gAiTotal = 0;
+          for (var gi = 0; gi < globalAiParsed.positions.length; gi++) {
+            var gp = globalAiParsed.positions[gi];
+            var gpAmt = Number(gp.amount) || 1;
+            var gpPrice = Number(gp.price) || 0;
+            var gpLine = gpAmt * gpPrice;
+            gAiTotal += gpLine;
+            var gpUnit = gp.unit ? " " + gp.unit : "";
+            gAiMsg += (gi + 1) + ". " + (gp.description || "");
+            if (gpAmt !== 1 || gp.unit) {
+              gAiMsg += " (" + gpAmt + gpUnit + " à CHF " + gpPrice.toFixed(2) + ")";
+            }
+            gAiMsg += " — CHF " + gpLine.toFixed(2) + "\n";
+          }
+          gAiMsg += "\n*Total: CHF " + gAiTotal.toFixed(2) + "*";
+          await sendText(from, gAiMsg);
+          await sendButtons(from, "Soll ich das so erfassen?", [
+            { id: "ai_confirm_yes", title: "Ja, erstellen" },
+            { id: "ai_confirm_no", title: "Abbrechen" },
+          ]);
+          return new Response("OK", { status: 200 });
         }
+      } catch (globalAiErr) {
+        console.warn("[AI Parse global] Error, falling through to step logic:", globalAiErr);
       }
+    }
+
+    if (step === "start") {
       await updateStep(session.id, "main_menu");
       await sendButtons(from, "Hallo! Was möchtest du tun?", [
         { id: "invoice", title: "Rechnung erstellen" },
@@ -323,57 +325,6 @@ Deno.serve(async (req: Request) => {
       }
 
     } else if (step === "main_menu") {
-      // AI shortcut: if the user typed a full command instead of clicking
-      // a button, try to parse it before falling into keyword matching.
-      // This catches "Rechnung für Müller: Beratung, 3h à 150" which
-      // would otherwise match text.includes("rechnung") and go into the
-      // step-by-step flow.
-      if (msgBody.length >= 20 && tenant && tenant.bexio_access_token && msgType === "text" && !buttonId) {
-        try {
-          var menuAiParsed = await parseNaturalCommand(msgBody);
-          if (menuAiParsed && menuAiParsed.action && menuAiParsed.positions && menuAiParsed.positions.length > 0) {
-            await supabase.from("sessions_handwerker").update({
-              invoice_data: menuAiParsed,
-              bexio_document_type: menuAiParsed.action === "new_offer" ? "offer" : "invoice",
-              step: "ai_confirm",
-              updated_at: new Date().toISOString(),
-            }).eq("id", session.id);
-            var mAiLabel = menuAiParsed.action === "new_offer" ? "Angebot"
-              : menuAiParsed.action === "add_position" ? "Position hinzufügen"
-              : "Rechnung";
-            var mAiMsg = "*" + mAiLabel + " erstellen?*\n\n";
-            if (menuAiParsed.contact_name) mAiMsg += "Kunde: " + menuAiParsed.contact_name + "\n";
-            if (menuAiParsed.title) mAiMsg += "Titel: " + menuAiParsed.title + "\n";
-            if (menuAiParsed.action === "add_position") {
-              mAiMsg += "Entwurf: " + (menuAiParsed.draft_ref === "latest" ? "Letzter" : (menuAiParsed.draft_ref || "Letzter")) + "\n";
-            }
-            mAiMsg += "\nPositionen:\n";
-            var mAiTotal = 0;
-            for (var mi = 0; mi < menuAiParsed.positions.length; mi++) {
-              var mp = menuAiParsed.positions[mi];
-              var mpAmt = Number(mp.amount) || 1;
-              var mpPrice = Number(mp.price) || 0;
-              var mpLine = mpAmt * mpPrice;
-              mAiTotal += mpLine;
-              var mpUnit = mp.unit ? " " + mp.unit : "";
-              mAiMsg += (mi + 1) + ". " + (mp.description || "");
-              if (mpAmt !== 1 || mp.unit) {
-                mAiMsg += " (" + mpAmt + mpUnit + " à CHF " + mpPrice.toFixed(2) + ")";
-              }
-              mAiMsg += " — CHF " + mpLine.toFixed(2) + "\n";
-            }
-            mAiMsg += "\n*Total: CHF " + mAiTotal.toFixed(2) + "*";
-            await sendText(from, mAiMsg);
-            await sendButtons(from, "Soll ich das so erfassen?", [
-              { id: "ai_confirm_yes", title: "Ja, erstellen" },
-              { id: "ai_confirm_no", title: "Abbrechen" },
-            ]);
-            return new Response("OK", { status: 200 });
-          }
-        } catch (menuAiErr) {
-          console.warn("[AI Parse main_menu] Error, falling through:", menuAiErr);
-        }
-      }
       if (choice === "invoice" || choice === "1" || text.includes("rechnung")) {
         await supabase.from("sessions_handwerker").update({
           step: "invoice_choice", bexio_document_type: "invoice", updated_at: new Date().toISOString(),
