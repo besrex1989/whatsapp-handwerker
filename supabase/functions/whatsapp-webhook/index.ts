@@ -211,7 +211,7 @@ Deno.serve(async (req: Request) => {
     var text = msgBody.toLowerCase();
     var choice = buttonId || listId || text;
 
-    if (choice === "reset" || choice === "abbrechen" || choice === "neustart") {
+    if (choice === "reset" || choice === "abbrechen" || choice === "neustart" || choice === "restart") {
       await resetSession(session.id);
       await sendText(from, "Session zurückgesetzt. Schreibe etwas um neu zu starten.");
       return new Response("OK", { status: 200 });
@@ -233,57 +233,59 @@ Deno.serve(async (req: Request) => {
     var step = session.step || "start";
     var tenant = session.tenant_id ? await getTenant(session.tenant_id) : null;
 
-    if (step === "start") {
-      // AI shortcut: if the message is long enough and looks like a complete
-      // command ("Neue Rechnung für Müller: Beratung, 3h à 150.-"), try to
-      // parse it with Claude and offer a one-click confirmation instead of
-      // walking through the 5-step flow.
-      if (msgBody.length >= 20 && tenant && tenant.bexio_access_token && msgType === "text") {
-        try {
-          var aiParsed = await parseNaturalCommand(msgBody);
-          if (aiParsed && aiParsed.action && aiParsed.positions && aiParsed.positions.length > 0) {
-            await supabase.from("sessions_handwerker").update({
-              invoice_data: aiParsed,
-              bexio_document_type: aiParsed.action === "new_offer" ? "offer" : "invoice",
-              step: "ai_confirm",
-              updated_at: new Date().toISOString(),
-            }).eq("id", session.id);
-            var aiLabel = aiParsed.action === "new_offer" ? "Angebot"
-              : aiParsed.action === "add_position" ? "Position hinzufügen"
-              : "Rechnung";
-            var aiMsg = "*" + aiLabel + " erstellen?*\n\n";
-            if (aiParsed.contact_name) aiMsg += "Kunde: " + aiParsed.contact_name + "\n";
-            if (aiParsed.title) aiMsg += "Titel: " + aiParsed.title + "\n";
-            if (aiParsed.action === "add_position") {
-              aiMsg += "Entwurf: " + (aiParsed.draft_ref === "latest" ? "Letzter" : (aiParsed.draft_ref || "Letzter")) + "\n";
-            }
-            aiMsg += "\nPositionen:\n";
-            var aiTotal = 0;
-            for (var ai = 0; ai < aiParsed.positions.length; ai++) {
-              var ap = aiParsed.positions[ai];
-              var apAmt = Number(ap.amount) || 1;
-              var apPrice = Number(ap.price) || 0;
-              var apLine = apAmt * apPrice;
-              aiTotal += apLine;
-              var apUnit = ap.unit ? " " + ap.unit : "";
-              aiMsg += (ai + 1) + ". " + (ap.description || "");
-              if (apAmt !== 1 || ap.unit) {
-                aiMsg += " (" + apAmt + apUnit + " à CHF " + apPrice.toFixed(2) + ")";
-              }
-              aiMsg += " — CHF " + apLine.toFixed(2) + "\n";
-            }
-            aiMsg += "\n*Total: CHF " + aiTotal.toFixed(2) + "*";
-            await sendText(from, aiMsg);
-            await sendButtons(from, "Soll ich das so erfassen?", [
-              { id: "ai_confirm_yes", title: "Ja, erstellen" },
-              { id: "ai_confirm_no", title: "Abbrechen" },
-            ]);
-            return new Response("OK", { status: 200 });
+    // --- Global AI shortcut ---
+    // At any early step (start, main_menu, invoice_choice), if the user
+    // types a full natural-language command (>= 20 chars, not a button),
+    // try to parse it with Claude before entering the step-based flow.
+    var aiEarlySteps: Record<string, boolean> = { start: true, main_menu: true, invoice_choice: true };
+    if (aiEarlySteps[step] && msgBody.length >= 20 && tenant && tenant.bexio_access_token && msgType === "text" && !buttonId && !listId) {
+      try {
+        var globalAiParsed = await parseNaturalCommand(msgBody);
+        if (globalAiParsed && globalAiParsed.action && globalAiParsed.positions && globalAiParsed.positions.length > 0) {
+          await supabase.from("sessions_handwerker").update({
+            invoice_data: globalAiParsed,
+            bexio_document_type: globalAiParsed.action === "new_offer" ? "offer" : "invoice",
+            step: "ai_confirm",
+            updated_at: new Date().toISOString(),
+          }).eq("id", session.id);
+          var gAiLabel = globalAiParsed.action === "new_offer" ? "Angebot"
+            : globalAiParsed.action === "add_position" ? "Position hinzufügen"
+            : "Rechnung";
+          var gAiMsg = "*" + gAiLabel + " erstellen?*\n\n";
+          if (globalAiParsed.contact_name) gAiMsg += "Kunde: " + globalAiParsed.contact_name + "\n";
+          if (globalAiParsed.title) gAiMsg += "Titel: " + globalAiParsed.title + "\n";
+          if (globalAiParsed.action === "add_position") {
+            gAiMsg += "Entwurf: " + (globalAiParsed.draft_ref === "latest" ? "Letzter" : (globalAiParsed.draft_ref || "Letzter")) + "\n";
           }
-        } catch (aiParseErr) {
-          console.warn("[AI Parse] Error, falling through to menu:", aiParseErr);
+          gAiMsg += "\nPositionen:\n";
+          var gAiTotal = 0;
+          for (var gi = 0; gi < globalAiParsed.positions.length; gi++) {
+            var gp = globalAiParsed.positions[gi];
+            var gpAmt = Number(gp.amount) || 1;
+            var gpPrice = Number(gp.price) || 0;
+            var gpLine = gpAmt * gpPrice;
+            gAiTotal += gpLine;
+            var gpUnit = gp.unit ? " " + gp.unit : "";
+            gAiMsg += (gi + 1) + ". " + (gp.description || "");
+            if (gpAmt !== 1 || gp.unit) {
+              gAiMsg += " (" + gpAmt + gpUnit + " à CHF " + gpPrice.toFixed(2) + ")";
+            }
+            gAiMsg += " — CHF " + gpLine.toFixed(2) + "\n";
+          }
+          gAiMsg += "\n*Total: CHF " + gAiTotal.toFixed(2) + "*";
+          await sendText(from, gAiMsg);
+          await sendButtons(from, "Soll ich das so erfassen?", [
+            { id: "ai_confirm_yes", title: "Ja, erstellen" },
+            { id: "ai_confirm_no", title: "Abbrechen" },
+          ]);
+          return new Response("OK", { status: 200 });
         }
+      } catch (globalAiErr) {
+        console.warn("[AI Parse global] Error, falling through to step logic:", globalAiErr);
       }
+    }
+
+    if (step === "start") {
       await updateStep(session.id, "main_menu");
       await sendButtons(from, "Hallo! Was möchtest du tun?", [
         { id: "invoice", title: "Rechnung erstellen" },
@@ -308,11 +310,28 @@ Deno.serve(async (req: Request) => {
             await sendText(from, "Wird erstellt...");
             try {
               await executeAiCommand(from, tenant, session, cmd);
-            } catch (execErr) {
-              console.error("[AI Execute] Error:", execErr);
-              await sendText(from, "Fehler: " + String(execErr).slice(0, 200));
+              await resetSession(session.id);
+            } catch (execErr: any) {
+              if (execErr && execErr.__contactMissing) {
+                await supabase.from("sessions_handwerker").update({
+                  contact_data: { name: execErr.contactName },
+                  step: "ai_contact_create",
+                  updated_at: new Date().toISOString(),
+                }).eq("id", session.id);
+                await sendText(from,
+                  "Kontakt *" + execErr.contactName + "* nicht in Bexio gefunden."
+                );
+                await sendButtons(from, "Kontakt jetzt anlegen?", [
+                  { id: "ai_contact_skip", title: "Ohne Adresse" },
+                  { id: "ai_contact_addr", title: "Adresse eingeben" },
+                  { id: "ai_confirm_no", title: "Abbrechen" },
+                ]);
+              } else {
+                console.error("[AI Execute] Error:", execErr);
+                await sendText(from, "Fehler: " + String(execErr).slice(0, 200));
+                await resetSession(session.id);
+              }
             }
-            await resetSession(session.id);
           }
         }
       } else {
@@ -320,6 +339,80 @@ Deno.serve(async (req: Request) => {
           { id: "ai_confirm_yes", title: "Ja, erstellen" },
           { id: "ai_confirm_no", title: "Abbrechen" },
         ]);
+      }
+
+    } else if (step === "ai_contact_create") {
+      if (choice === "ai_confirm_no" || text === "abbrechen") {
+        await resetSession(session.id);
+        await sendText(from, "Abgebrochen.");
+      } else if (choice === "ai_contact_skip" || text === "ohne") {
+        var ccData = session.contact_data as any;
+        var ccCmd = session.invoice_data as any;
+        if (!tenant || !ccData || !ccCmd) {
+          await sendText(from, "Fehler: Daten fehlen. Bitte nochmal.");
+          await resetSession(session.id);
+        } else {
+          await sendText(from, "Kontakt wird angelegt...");
+          try {
+            var newContact = await bexioCreateContact(tenant, {
+              name: ccData.name || "", address: "", postcode: "", city: "",
+            });
+            ccCmd._resolved_contact_id = newContact.id;
+            await supabase.from("sessions_handwerker").update({
+              invoice_data: ccCmd, updated_at: new Date().toISOString(),
+            }).eq("id", session.id);
+            await executeAiCommandWithContact(from, tenant, session, ccCmd, newContact.id);
+          } catch (ccErr) {
+            console.error("[AI Contact Create] Error:", ccErr);
+            await sendText(from, "Fehler: " + String(ccErr).slice(0, 200));
+          }
+          await resetSession(session.id);
+        }
+      } else if (choice === "ai_contact_addr" || text === "adresse") {
+        await updateStep(session.id, "ai_contact_address");
+        await sendText(from,
+          "Adresse eingeben im Format:\n*Strasse Nr, PLZ Ort*\n\n" +
+          "Beispiel: Freiburgstrasse 443, 3018 Bern"
+        );
+      } else {
+        await sendButtons(from, "Kontakt anlegen?", [
+          { id: "ai_contact_skip", title: "Ohne Adresse" },
+          { id: "ai_contact_addr", title: "Adresse eingeben" },
+          { id: "ai_confirm_no", title: "Abbrechen" },
+        ]);
+      }
+
+    } else if (step === "ai_contact_address") {
+      if (!msgBody || msgBody.length < 3) {
+        await sendText(from, "Bitte Adresse eingeben (z.B. *Freiburgstrasse 443, 3018 Bern*):");
+      } else {
+        var ccData2 = session.contact_data as any;
+        var ccCmd2 = session.invoice_data as any;
+        if (!tenant || !ccData2 || !ccCmd2) {
+          await sendText(from, "Fehler: Daten fehlen.");
+          await resetSession(session.id);
+        } else {
+          var addrParts = msgBody.split(",");
+          var addrStreet = (addrParts[0] || "").trim();
+          var addrRest = (addrParts[1] || "").trim();
+          var addrMatch = addrRest.match(/^(\d{4})\s+(.+)$/);
+          var addrPostcode = addrMatch ? addrMatch[1] : "";
+          var addrCity = addrMatch ? addrMatch[2] : addrRest;
+          await sendText(from, "Kontakt wird angelegt...");
+          try {
+            var newC2 = await bexioCreateContact(tenant, {
+              name: ccData2.name || "",
+              address: addrStreet,
+              postcode: addrPostcode,
+              city: addrCity,
+            });
+            await executeAiCommandWithContact(from, tenant, session, ccCmd2, newC2.id);
+          } catch (addrErr) {
+            console.error("[AI Contact Address] Error:", addrErr);
+            await sendText(from, "Fehler: " + String(addrErr).slice(0, 200));
+          }
+          await resetSession(session.id);
+        }
       }
 
     } else if (step === "main_menu") {
@@ -2157,23 +2250,42 @@ async function executeAiCommand(from: string, tenant: any, session: any, cmd: an
     var targetDraft: any = null;
 
     if (cmd.contact_name && drafts.length > 0) {
-      var searchLower = String(cmd.contact_name).toLowerCase();
+      var searchTokens = String(cmd.contact_name).toLowerCase()
+        .replace(/[.\-,]/g, " ").split(/\s+/).filter(function (t: string) { return t.length >= 2; });
       for (var di = 0; di < drafts.length; di++) {
         try {
           var dc = await bexioGetContact(tenant, drafts[di].contact_id);
-          if (dc && dc.name_1 && String(dc.name_1).toLowerCase().includes(searchLower)) {
+          var dcName = String(dc && dc.name_1 || "").toLowerCase();
+          var allMatch = searchTokens.length > 0 && searchTokens.every(function (tok: string) {
+            return dcName.includes(tok);
+          });
+          if (allMatch) {
             targetDraft = drafts[di];
             break;
           }
         } catch (_e) { /* skip */ }
       }
     }
-    if (!targetDraft && drafts.length > 0) {
+    if (!targetDraft && !cmd.contact_name && drafts.length > 0) {
       targetDraft = drafts[0];
     }
 
     if (!targetDraft) {
-      await sendText(from, "Kein Entwurf gefunden für \"" + (cmd.contact_name || "") + "\".");
+      var noHit = cmd.contact_name
+        ? "Kein Entwurf gefunden für \"" + cmd.contact_name + "\". Soll ich stattdessen eine neue Rechnung erstellen?"
+        : "Kein Entwurf gefunden. Erstelle zuerst ein Dokument.";
+      await sendText(from, noHit);
+      if (cmd.contact_name) {
+        cmd.action = "new_invoice";
+        await supabase.from("sessions_handwerker").update({
+          invoice_data: cmd, step: "ai_confirm",
+          updated_at: new Date().toISOString(),
+        }).eq("id", session.id);
+        await sendButtons(from, "Neue Rechnung für \"" + cmd.contact_name + "\" mit den gleichen Positionen?", [
+          { id: "ai_confirm_yes", title: "Ja, erstellen" },
+          { id: "ai_confirm_no", title: "Abbrechen" },
+        ]);
+      }
       return;
     }
 
@@ -2191,7 +2303,7 @@ async function executeAiCommand(from: string, tenant: any, session: any, cmd: an
     await sendText(from,
       "Position(en) hinzugefügt!\n\n" +
       "Entwurf: " + (targetDraft.document_nr || "—") + "\n" +
-      "Neues Total: CHF " + (updatedDoc.total || "0")
+      "Neues Total: CHF " + Number(updatedDoc.total || 0).toFixed(2)
     );
     try {
       await sendBexioPdfPreview(from, tenant, targetDraft.id, docType, targetDraft.document_nr || "");
@@ -2207,16 +2319,16 @@ async function executeAiCommand(from: string, tenant: any, session: any, cmd: an
     var contacts = await bexioSearchContacts(tenant, cmd.contact_name);
     if (contacts.length > 0) {
       contactId = contacts[0].id;
-    } else {
-      var newC = await bexioCreateContact(tenant, {
-        name: cmd.contact_name, address: "", postcode: "", city: "",
-      });
-      contactId = newC.id;
     }
   }
 
+  if (!contactId && cmd.contact_name) {
+    // Signal back to the caller that the contact needs to be created
+    throw { __contactMissing: true, contactName: cmd.contact_name };
+  }
+
   if (!contactId) {
-    await sendText(from, "Kontakt konnte nicht gefunden oder erstellt werden.");
+    await sendText(from, "Kein Kundenname angegeben. Bitte nochmal versuchen.");
     return;
   }
 
@@ -2249,6 +2361,36 @@ async function executeAiCommand(from: string, tenant: any, session: any, cmd: an
     await sendBexioPdfPreview(from, tenant, doc.id, docType, String(docNr));
   } catch (previewErr) {
     console.error("[AI Execute Preview] Error:", previewErr);
+  }
+}
+
+async function executeAiCommandWithContact(from: string, tenant: any, session: any, cmd: any, contactId: number): Promise<void> {
+  var docType: DocType = cmd.action === "new_offer" ? "offer" : "invoice";
+  var positions = cmd.positions.map(function (p: any) {
+    var a = Number(p.amount) || 1;
+    var pr = Number(p.price) || 0;
+    return {
+      description: p.description || "",
+      amount: a, unit: p.unit || "", price: pr,
+      total: Math.round(a * pr * 100) / 100,
+    };
+  });
+  var doc = await bexioCreateDocument(tenant, {
+    contactId: contactId,
+    title: cmd.title || docLabel(docType),
+    positions: positions,
+  }, docType);
+  var docNr = doc.document_nr || doc.id;
+  var docTotal = doc.total || positions.reduce(function (s: number, p: any) { return s + p.total; }, 0);
+  await sendText(from,
+    docLabel(docType) + " erstellt!\n\n" +
+    "Nr: " + docNr + "\n" +
+    "Total: CHF " + Number(docTotal).toFixed(2)
+  );
+  try {
+    await sendBexioPdfPreview(from, tenant, doc.id, docType, String(docNr));
+  } catch (previewErr) {
+    console.error("[AI Execute WithContact Preview] Error:", previewErr);
   }
 }
 
