@@ -2159,12 +2159,16 @@ async function executeAiCommand(from: string, tenant: any, session: any, cmd: an
     var targetDraft: any = null;
 
     if (cmd.contact_name && drafts.length > 0) {
-      var searchLower = String(cmd.contact_name).toLowerCase();
+      var searchTokens = String(cmd.contact_name).toLowerCase()
+        .replace(/[.\-,]/g, " ").split(/\s+/).filter(function (t: string) { return t.length >= 2; });
       for (var di = 0; di < drafts.length; di++) {
         try {
           var dc = await bexioGetContact(tenant, drafts[di].contact_id);
           var dcName = String(dc && dc.name_1 || "").toLowerCase();
-          if (dcName.includes(searchLower) || searchLower.includes(dcName)) {
+          var allMatch = searchTokens.length > 0 && searchTokens.every(function (tok: string) {
+            return dcName.includes(tok);
+          });
+          if (allMatch) {
             targetDraft = drafts[di];
             break;
           }
@@ -2177,9 +2181,20 @@ async function executeAiCommand(from: string, tenant: any, session: any, cmd: an
 
     if (!targetDraft) {
       var noHit = cmd.contact_name
-        ? "Kein Entwurf gefunden für \"" + cmd.contact_name + "\". Prüfe den Kundennamen oder erstelle zuerst ein Dokument."
+        ? "Kein Entwurf gefunden für \"" + cmd.contact_name + "\". Soll ich stattdessen eine neue Rechnung erstellen?"
         : "Kein Entwurf gefunden. Erstelle zuerst ein Dokument.";
       await sendText(from, noHit);
+      if (cmd.contact_name) {
+        cmd.action = "new_invoice";
+        await supabase.from("sessions_handwerker").update({
+          invoice_data: cmd, step: "ai_confirm",
+          updated_at: new Date().toISOString(),
+        }).eq("id", session.id);
+        await sendButtons(from, "Neue Rechnung für \"" + cmd.contact_name + "\" mit den gleichen Positionen?", [
+          { id: "ai_confirm_yes", title: "Ja, erstellen" },
+          { id: "ai_confirm_no", title: "Abbrechen" },
+        ]);
+      }
       return;
     }
 
@@ -2197,7 +2212,7 @@ async function executeAiCommand(from: string, tenant: any, session: any, cmd: an
     await sendText(from,
       "Position(en) hinzugefügt!\n\n" +
       "Entwurf: " + (targetDraft.document_nr || "—") + "\n" +
-      "Neues Total: CHF " + (updatedDoc.total || "0")
+      "Neues Total: CHF " + Number(updatedDoc.total || 0).toFixed(2)
     );
     try {
       await sendBexioPdfPreview(from, tenant, targetDraft.id, docType, targetDraft.document_nr || "");
