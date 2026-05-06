@@ -309,8 +309,8 @@ Deno.serve(async (req: Request) => {
           } else {
             await sendText(from, "Wird erstellt...");
             try {
-              await executeAiCommand(from, tenant, session, cmd);
-              await resetSession(session.id);
+              var aiDone = await executeAiCommand(from, tenant, session, cmd);
+              if (aiDone) await resetSession(session.id);
             } catch (execErr: any) {
               if (execErr && execErr.__contactMissing) {
                 await supabase.from("sessions_handwerker").update({
@@ -2242,7 +2242,7 @@ async function parseNaturalCommand(text: string): Promise<any> {
   }
 }
 
-async function executeAiCommand(from: string, tenant: any, session: any, cmd: any): Promise<void> {
+async function executeAiCommand(from: string, tenant: any, session: any, cmd: any): Promise<boolean> {
   var docType: DocType = cmd.action === "new_offer" ? "offer" : "invoice";
 
   if (cmd.action === "add_position") {
@@ -2285,8 +2285,9 @@ async function executeAiCommand(from: string, tenant: any, session: any, cmd: an
           { id: "ai_confirm_yes", title: "Ja, erstellen" },
           { id: "ai_confirm_no", title: "Abbrechen" },
         ]);
+        return false;
       }
-      return;
+      return true;
     }
 
     for (var pi = 0; pi < cmd.positions.length; pi++) {
@@ -2310,7 +2311,7 @@ async function executeAiCommand(from: string, tenant: any, session: any, cmd: an
     } catch (previewErr) {
       console.error("[AI Execute Preview] Error:", previewErr);
     }
-    return;
+    return true;
   }
 
   // new_invoice or new_offer
@@ -2329,7 +2330,7 @@ async function executeAiCommand(from: string, tenant: any, session: any, cmd: an
 
   if (!contactId) {
     await sendText(from, "Kein Kundenname angegeben. Bitte nochmal versuchen.");
-    return;
+    return true;
   }
 
   var positions = cmd.positions.map(function (p: any) {
@@ -2362,6 +2363,7 @@ async function executeAiCommand(from: string, tenant: any, session: any, cmd: an
   } catch (previewErr) {
     console.error("[AI Execute Preview] Error:", previewErr);
   }
+  return true;
 }
 
 async function executeAiCommandWithContact(from: string, tenant: any, session: any, cmd: any, contactId: number): Promise<void> {
