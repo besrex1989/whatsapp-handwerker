@@ -234,12 +234,93 @@ Deno.serve(async (req: Request) => {
     var tenant = session.tenant_id ? await getTenant(session.tenant_id) : null;
 
     if (step === "start") {
+      // AI shortcut: if the message is long enough and looks like a complete
+      // command ("Neue Rechnung für Müller: Beratung, 3h à 150.-"), try to
+      // parse it with Claude and offer a one-click confirmation instead of
+      // walking through the 5-step flow.
+      if (msgBody.length >= 20 && tenant && tenant.bexio_access_token && msgType === "text") {
+        try {
+          var aiParsed = await parseNaturalCommand(msgBody);
+          if (aiParsed && aiParsed.action && aiParsed.positions && aiParsed.positions.length > 0) {
+            await supabase.from("sessions_handwerker").update({
+              invoice_data: aiParsed,
+              bexio_document_type: aiParsed.action === "new_offer" ? "offer" : "invoice",
+              step: "ai_confirm",
+              updated_at: new Date().toISOString(),
+            }).eq("id", session.id);
+            var aiLabel = aiParsed.action === "new_offer" ? "Angebot"
+              : aiParsed.action === "add_position" ? "Position hinzufügen"
+              : "Rechnung";
+            var aiMsg = "*" + aiLabel + " erstellen?*\n\n";
+            if (aiParsed.contact_name) aiMsg += "Kunde: " + aiParsed.contact_name + "\n";
+            if (aiParsed.title) aiMsg += "Titel: " + aiParsed.title + "\n";
+            if (aiParsed.action === "add_position") {
+              aiMsg += "Entwurf: " + (aiParsed.draft_ref === "latest" ? "Letzter" : (aiParsed.draft_ref || "Letzter")) + "\n";
+            }
+            aiMsg += "\nPositionen:\n";
+            var aiTotal = 0;
+            for (var ai = 0; ai < aiParsed.positions.length; ai++) {
+              var ap = aiParsed.positions[ai];
+              var apAmt = Number(ap.amount) || 1;
+              var apPrice = Number(ap.price) || 0;
+              var apLine = apAmt * apPrice;
+              aiTotal += apLine;
+              var apUnit = ap.unit ? " " + ap.unit : "";
+              aiMsg += (ai + 1) + ". " + (ap.description || "");
+              if (apAmt !== 1 || ap.unit) {
+                aiMsg += " (" + apAmt + apUnit + " à CHF " + apPrice.toFixed(2) + ")";
+              }
+              aiMsg += " — CHF " + apLine.toFixed(2) + "\n";
+            }
+            aiMsg += "\n*Total: CHF " + aiTotal.toFixed(2) + "*";
+            await sendText(from, aiMsg);
+            await sendButtons(from, "Soll ich das so erfassen?", [
+              { id: "ai_confirm_yes", title: "Ja, erstellen" },
+              { id: "ai_confirm_no", title: "Abbrechen" },
+            ]);
+            return new Response("OK", { status: 200 });
+          }
+        } catch (aiParseErr) {
+          console.warn("[AI Parse] Error, falling through to menu:", aiParseErr);
+        }
+      }
       await updateStep(session.id, "main_menu");
       await sendButtons(from, "Hallo! Was möchtest du tun?", [
         { id: "invoice", title: "Rechnung erstellen" },
         { id: "offer", title: "Angebot erstellen" },
         { id: "search", title: "Kontakt suchen" },
       ]);
+
+    } else if (step === "ai_confirm") {
+      if (choice === "ai_confirm_no" || text === "nein" || text === "abbrechen") {
+        await resetSession(session.id);
+        await sendText(from, "Abgebrochen. Schreibe etwas um neu zu starten.");
+      } else if (choice === "ai_confirm_yes" || text === "ja" || text === "ok") {
+        if (!tenant || !tenant.bexio_access_token) {
+          await sendText(from, "Bexio ist nicht verbunden.");
+          await resetSession(session.id);
+        } else {
+          var cmd = session.invoice_data as any;
+          if (!cmd || !cmd.positions || cmd.positions.length === 0) {
+            await sendText(from, "Fehler: Keine Daten. Bitte nochmal versuchen.");
+            await resetSession(session.id);
+          } else {
+            await sendText(from, "Wird erstellt...");
+            try {
+              await executeAiCommand(from, tenant, session, cmd);
+            } catch (execErr) {
+              console.error("[AI Execute] Error:", execErr);
+              await sendText(from, "Fehler: " + String(execErr).slice(0, 200));
+            }
+            await resetSession(session.id);
+          }
+        }
+      } else {
+        await sendButtons(from, "Soll ich das so erfassen?", [
+          { id: "ai_confirm_yes", title: "Ja, erstellen" },
+          { id: "ai_confirm_no", title: "Abbrechen" },
+        ]);
+      }
 
     } else if (step === "main_menu") {
       if (choice === "invoice" || choice === "1" || text.includes("rechnung")) {
@@ -2010,6 +2091,166 @@ async function bexioAddDocumentPosition(
 }
 
 // ===== Position amount/unit parsing =====
+
+// ===== AI Natural Command Parsing =====
+
+async function parseNaturalCommand(text: string): Promise<any> {
+  var resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": Deno.env.get("ANTHROPIC_API_KEY")!,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 512,
+      system: "Du bist ein Parser für einen WhatsApp-Rechnungs-Bot für Schweizer KMU mit Bexio.\n\n" +
+        "Extrahiere aus der Nachricht die Absicht und Daten als JSON.\n\n" +
+        "Mögliche Aktionen:\n" +
+        "- \"new_invoice\": Neue Rechnung erstellen\n" +
+        "- \"new_offer\": Neues Angebot/Offerte erstellen\n" +
+        "- \"add_position\": Position zu bestehendem Entwurf hinzufügen\n\n" +
+        "Antworte NUR mit JSON:\n" +
+        "{\"action\":\"new_invoice|new_offer|add_position\",\"contact_name\":\"Firmenname\"," +
+        "\"title\":\"Titel (sinnvollen generieren wenn nicht angegeben)\"," +
+        "\"draft_ref\":\"latest\"," +
+        "\"positions\":[{\"description\":\"...\",\"amount\":5,\"unit\":\"Std\",\"price\":150.00}]}\n\n" +
+        "Regeln:\n" +
+        "- Einheiten: h/Stunde/Stunden → \"Std\", Stk/Stück → \"Stk\", m2/qm → \"m²\", pauschal → \"\"\n" +
+        "- Preise als Zahl ohne CHF/.-\n" +
+        "- \"Offerte\"/\"Angebot\" → new_offer; \"Rechnung\" oder unklar → new_invoice\n" +
+        "- \"letzte\"/\"bestehend\"/\"Entwurf\"/\"weitere Position\" → add_position\n" +
+        "- draft_ref nur bei add_position setzen\n" +
+        "- Wenn die Nachricht KEIN klarer Auftrag ist (Begrüssung, Frage, einzelne Wörter), antworte mit: null",
+      messages: [{ role: "user", content: text }],
+    }),
+  });
+
+  if (!resp.ok) {
+    var errText = await resp.text();
+    console.warn("[AI Parse] API error:", resp.status, errText.slice(0, 200));
+    return null;
+  }
+
+  var data = await resp.json();
+  var aiText = data.content[0].text;
+  if (aiText.trim() === "null") return null;
+  var jsonMatch = aiText.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return null;
+  try {
+    var parsed = JSON.parse(jsonMatch[0]);
+    if (!parsed.action || !parsed.positions || !Array.isArray(parsed.positions) || parsed.positions.length === 0) {
+      return null;
+    }
+    return parsed;
+  } catch (_e) {
+    return null;
+  }
+}
+
+async function executeAiCommand(from: string, tenant: any, session: any, cmd: any): Promise<void> {
+  var docType: DocType = cmd.action === "new_offer" ? "offer" : "invoice";
+
+  if (cmd.action === "add_position") {
+    var drafts = await bexioListDrafts(tenant, docType);
+    var targetDraft: any = null;
+
+    if (cmd.contact_name && drafts.length > 0) {
+      var searchLower = String(cmd.contact_name).toLowerCase();
+      for (var di = 0; di < drafts.length; di++) {
+        try {
+          var dc = await bexioGetContact(tenant, drafts[di].contact_id);
+          if (dc && dc.name_1 && String(dc.name_1).toLowerCase().includes(searchLower)) {
+            targetDraft = drafts[di];
+            break;
+          }
+        } catch (_e) { /* skip */ }
+      }
+    }
+    if (!targetDraft && drafts.length > 0) {
+      targetDraft = drafts[0];
+    }
+
+    if (!targetDraft) {
+      await sendText(from, "Kein Entwurf gefunden für \"" + (cmd.contact_name || "") + "\".");
+      return;
+    }
+
+    for (var pi = 0; pi < cmd.positions.length; pi++) {
+      var pos = cmd.positions[pi];
+      await bexioAddDocumentPosition(tenant, targetDraft.id, docType, {
+        description: pos.description || "",
+        amount: Number(pos.amount) || 1,
+        unit: pos.unit || "",
+        price: Number(pos.price) || 0,
+      });
+    }
+
+    var updatedDoc = await bexioGetDocument(tenant, targetDraft.id, docType);
+    await sendText(from,
+      "Position(en) hinzugefügt!\n\n" +
+      "Entwurf: " + (targetDraft.document_nr || "—") + "\n" +
+      "Neues Total: CHF " + (updatedDoc.total || "0")
+    );
+    try {
+      await sendBexioPdfPreview(from, tenant, targetDraft.id, docType, targetDraft.document_nr || "");
+    } catch (previewErr) {
+      console.error("[AI Execute Preview] Error:", previewErr);
+    }
+    return;
+  }
+
+  // new_invoice or new_offer
+  var contactId: number | null = null;
+  if (cmd.contact_name) {
+    var contacts = await bexioSearchContacts(tenant, cmd.contact_name);
+    if (contacts.length > 0) {
+      contactId = contacts[0].id;
+    } else {
+      var newC = await bexioCreateContact(tenant, {
+        name: cmd.contact_name, address: "", postcode: "", city: "",
+      });
+      contactId = newC.id;
+    }
+  }
+
+  if (!contactId) {
+    await sendText(from, "Kontakt konnte nicht gefunden oder erstellt werden.");
+    return;
+  }
+
+  var positions = cmd.positions.map(function (p: any) {
+    var a = Number(p.amount) || 1;
+    var pr = Number(p.price) || 0;
+    return {
+      description: p.description || "",
+      amount: a,
+      unit: p.unit || "",
+      price: pr,
+      total: Math.round(a * pr * 100) / 100,
+    };
+  });
+
+  var doc = await bexioCreateDocument(tenant, {
+    contactId: contactId,
+    title: cmd.title || docLabel(docType),
+    positions: positions,
+  }, docType);
+
+  var docNr = doc.document_nr || doc.id;
+  var docTotal = doc.total || positions.reduce(function (s: number, p: any) { return s + p.total; }, 0);
+  await sendText(from,
+    docLabel(docType) + " erstellt!\n\n" +
+    "Nr: " + docNr + "\n" +
+    "Total: CHF " + Number(docTotal).toFixed(2)
+  );
+  try {
+    await sendBexioPdfPreview(from, tenant, doc.id, docType, String(docNr));
+  } catch (previewErr) {
+    console.error("[AI Execute Preview] Error:", previewErr);
+  }
+}
 
 // Parse free-text like "5 Std", "2.5 m2", "3,5 kg", "1 pauschal", "pauschal",
 // or just "1". Returns null for invalid input so the caller can re-prompt.
