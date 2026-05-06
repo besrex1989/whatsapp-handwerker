@@ -2163,19 +2163,23 @@ async function executeAiCommand(from: string, tenant: any, session: any, cmd: an
       for (var di = 0; di < drafts.length; di++) {
         try {
           var dc = await bexioGetContact(tenant, drafts[di].contact_id);
-          if (dc && dc.name_1 && String(dc.name_1).toLowerCase().includes(searchLower)) {
+          var dcName = String(dc && dc.name_1 || "").toLowerCase();
+          if (dcName.includes(searchLower) || searchLower.includes(dcName)) {
             targetDraft = drafts[di];
             break;
           }
         } catch (_e) { /* skip */ }
       }
     }
-    if (!targetDraft && drafts.length > 0) {
+    if (!targetDraft && !cmd.contact_name && drafts.length > 0) {
       targetDraft = drafts[0];
     }
 
     if (!targetDraft) {
-      await sendText(from, "Kein Entwurf gefunden für \"" + (cmd.contact_name || "") + "\".");
+      var noHit = cmd.contact_name
+        ? "Kein Entwurf gefunden für \"" + cmd.contact_name + "\". Prüfe den Kundennamen oder erstelle zuerst ein Dokument."
+        : "Kein Entwurf gefunden. Erstelle zuerst ein Dokument.";
+      await sendText(from, noHit);
       return;
     }
 
