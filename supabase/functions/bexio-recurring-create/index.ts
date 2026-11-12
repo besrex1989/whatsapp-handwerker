@@ -205,7 +205,7 @@ serve(async (req) => {
       tenant: tenant_id,
       source_from: range.from,
       source_to: range.to,
-      delta_months: range.delta,
+      target_month: body.target_month,
       created: results.filter((r) => r.status === "created").length,
       exists: results.filter((r) => r.status === "exists").length,
       errors: results.filter((r) => r.status === "error").length,

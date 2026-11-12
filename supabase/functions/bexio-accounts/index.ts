@@ -11,8 +11,9 @@
 //   POST /bexio-accounts { tenant_id, account_id|null }
 //     -> { success: true }
 //
-// Beide Endpunkte verlangen Login + Besitz des Tenants (requireTenantOwner),
-// weil die Function mit --no-verify-jwt deployed wird.
+// Auth: gültiges Supabase-User-JWT; die E-Mail im JWT muss zum Tenant
+// gehören (requireTenantOwner). Ohne diese Prüfung könnte jeder, der eine
+// Tenant-ID kennt, die Konten lesen und die Einstellung überschreiben.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -68,10 +69,6 @@ async function getBexioToken(tenant: any): Promise<string> {
   return tokens.access_token;
 }
 
-// Spalten, die GET braucht (Token-Refresh + Antwort).
-const TENANT_COLUMNS = "id, email, bexio_access_token, bexio_refresh_token, "
-  + "bexio_expires_at, bexio_preferred_account_id, bexio_account_id";
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: CORS_HEADERS });
@@ -81,11 +78,7 @@ serve(async (req) => {
     if (req.method === "GET") {
       const url = new URL(req.url);
       const tenantId = url.searchParams.get("tenant_id");
-      if (!tenantId) {
-        return json({ error: "tenant_id required" }, 400);
-      }
-      // Aufrufer muss angemeldet sein und der Tenant muss ihm gehören.
-      const auth = await requireTenantOwner(req, tenantId, TENANT_COLUMNS);
+      const auth = await requireTenantOwner(req, tenantId);
       if ("response" in auth) return auth.response;
       const tenant = auth.tenant;
       const token = await getBexioToken(tenant);
@@ -131,8 +124,6 @@ serve(async (req) => {
     if (req.method === "POST") {
       const body = await req.json().catch(() => ({}));
       const { tenant_id, account_id } = body;
-      if (!tenant_id) return json({ error: "tenant_id required" }, 400);
-
       const auth = await requireTenantOwner(req, tenant_id, "id, email");
       if ("response" in auth) return auth.response;
 
@@ -151,7 +142,7 @@ serve(async (req) => {
           bexio_account_id: null,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", auth.tenant.id);
+        .eq("id", tenant_id);
       if (upd.error) return json({ error: upd.error.message }, 500);
       return json({ success: true, preferred_account_id: prefId }, 200);
     }

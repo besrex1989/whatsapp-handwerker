@@ -110,11 +110,13 @@ Frontend-Code während des Deploy-Fensters nicht bricht.
 - Neue Spalten mit sensiblen Tokens (Bexio, Stripe) **nie** für `anon`
   selectable machen.
 
-### Edge-Function-Auth
-- Alle Functions werden mit `--no-verify-jwt` deployed, sind also ohne
-  Login erreichbar. Jede Function, die Tenant-Daten liest oder schreibt,
-  muss selbst prüfen: `requireTenantOwner(req, tenant_id, "id, email")`
-  aus `_shared/tenant-auth.ts` (Login + Tenant gehört dem Aufrufer).
+### Edge Functions: Aufrufer prüfen
+- Alle Functions werden mit `--no-verify-jwt` deployt, sind also ohne Token
+  erreichbar. Jede Function, die eine `tenant_id` entgegennimmt, muss
+  selbst prüfen, dass der Tenant dem Aufrufer gehört:
+  `requireTenantOwner(req, tenantId)` aus `_shared/tenant-auth.ts`.
+- Das Frontend schickt dafür `Authorization: Bearer <session.access_token>`
+  (nicht den anon-Key).
 - `bexio-oauth`: POST und Callback (GET) verlangen beide den Besitzer.
   Der OAuth-`state` ist signiert und 15 Minuten gültig
   (`_shared/oauth-state.ts`, Secret = `BEXIO_CLIENT_SECRET`).
@@ -147,8 +149,9 @@ Frontend-Code während des Deploy-Fensters nicht bricht.
   `_shared/month-shift.ts` (rein, mit Node-Tests:
   `node --test supabase/functions/_shared/*.test.ts`).
 - Vorlagen kommen aus einem Zeitraum (`source_from`/`source_to`,
-  Rechnungsdatum). `target_month` gilt für den ersten Monat des Zeitraums;
-  jede Rechnung wird um gleich viele Monate verschoben.
+  Rechnungsdatum). `target_month` ist der Zielmonat für ALLE gewählten
+  Rechnungen (Okt- und Nov-Vorlagen landen beide im Zielmonat) und darf
+  nicht im Zeitraum liegen.
 - Rechnungen mit Gruppen (`KbPositionSubposition`) lassen sich nicht in
   einem `POST /kb_invoice` anlegen: Rechnung ohne Positionen erstellen,
   dann Positionen einzeln (`/kb_position_*`, Kinder mit neuer `parent_id`).
