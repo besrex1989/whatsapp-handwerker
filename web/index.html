@@ -41,7 +41,7 @@
 
   <!-- Eigene Styles nur für die Startseite. ?v= bei jeder Änderung hochzählen:
        /css und /js werden ein Jahr immutable gecacht (vercel.json). -->
-  <link rel="stylesheet" href="css/landing.css?v=1">
+  <link rel="stylesheet" href="css/landing.css?v=2">
 
   <!-- Structured Data -->
   <script type="application/ld+json">
@@ -107,6 +107,7 @@
       "Entwürfe bearbeiten",
       "PDF-Vorschau per WhatsApp",
       "Produkte aus Bexio-Katalog wählen",
+      "Serienrechnungen: wiederkehrende Rechnungen für den neuen Monat als Entwürfe anlegen",
       "DSG-konform"
     ]
   }
@@ -138,6 +139,14 @@
         "acceptedAnswer": {
           "@type": "Answer",
           "text": "Nach der Registrierung klickst du im Dashboard auf Bexio verbinden. Du wirst auf Bexio weitergeleitet und autorisierst WhatsBill per OAuth — wir speichern niemals dein Bexio-Passwort."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Was sind Serienrechnungen?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Im Dashboard wählst du einen Zeitraum, zum Beispiel den letzten Monat. WhatsBill zeigt dir die Rechnungen daraus als Vorschau und legt die ausgewählten für den neuen Monat als Entwürfe in Bexio an. Monatsnamen im Text werden angepasst, bereits erstellte Rechnungen werden nicht doppelt angelegt. Serienrechnungen sind im Abo und in der Testphase inbegriffen."
         }
       },
       {
@@ -200,8 +209,8 @@
     <div class="lp-wrap lp-nav-inner">
       <a href="/" class="lp-logo" aria-label="WhatsBill Startseite">Whats<span>Bill</span></a>
       <nav class="lp-nav-links" aria-label="Hauptnavigation">
+        <a href="#serienrechnungen">Serienrechnungen</a>
         <a href="#funktionen">Funktionen</a>
-        <a href="#ablauf">So geht's</a>
         <a href="#preise">Preise</a>
         <a href="#faq">FAQ</a>
       </nav>
@@ -220,6 +229,7 @@
     <div class="lp-wrap lp-hero-grid">
       <div class="lp-hero-copy">
         <p class="lp-eyebrow"><span class="lp-dot"></span>Für Bexio · Für Schweizer KMU</p>
+        <a href="#serienrechnungen" class="lp-new"><b>Neu</b>Serienrechnungen für den ganzen Monat <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
         <h1>Die Rechnung ist geschrieben, bevor du im Auto&nbsp;sitzt.</h1>
         <p class="lp-lead">
           Schreib WhatsBill per <strong>WhatsApp</strong>, was du gemacht hast. Sekunden später
@@ -265,7 +275,7 @@
     <div class="lp-wrap">
       <div class="lp-stats-grid">
         <div class="lp-stat"><b>&lt; 2 Min.</b><span>pro Rechnung oder Angebot</span></div>
-        <div class="lp-stat"><b>0 Apps</b><span>WhatsApp hast du schon</span></div>
+        <div class="lp-stat"><b>1 Klick</b><span>für alle Monatsrechnungen</span></div>
         <div class="lp-stat"><b>14 Tage</b><span>gratis, ohne Kreditkarte</span></div>
         <div class="lp-stat"><b>CHF 19</b><span>pro Monat, alles inklusive</span></div>
       </div>
@@ -294,6 +304,51 @@
           <p>Der Bot zeigt dir Kunde, Positionen und Total. Ein Tipp, und der Entwurf liegt in Bexio.</p>
         </li>
       </ol>
+    </div>
+  </section>
+
+  <!-- Serienrechnungen -->
+  <section id="serienrechnungen" class="lp-serie">
+    <div class="lp-hero-glow" aria-hidden="true"></div>
+    <div class="lp-wrap lp-serie-grid">
+      <div class="lp-serie-copy">
+        <p class="lp-kicker" data-reveal>Neu · Serienrechnungen</p>
+        <h2 class="lp-h2" data-reveal>Alle Monatsrechnungen. Ein Durchgang.</h2>
+        <p class="lp-serie-lead" data-reveal>
+          Wartungsverträge, Mieten, Abos, Mandate: Was du jeden Monat neu verrechnest,
+          musst du nicht jeden Monat neu schreiben. WhatsBill nimmt die Rechnungen eines
+          Zeitraums als Vorlage und legt sie für den neuen Monat als Entwürfe in Bexio an.
+        </p>
+        <ul class="lp-serie-list">
+          <li data-reveal><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Zeitraum wählen, Vorschau prüfen.</b> Du siehst jede Rechnung, bevor etwas angelegt wird.</span></li>
+          <li data-reveal><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Monat im Text wird angepasst.</b> Aus «Wartung Oktober» wird «Wartung November» – markiert, damit du es kontrollieren kannst.</span></li>
+          <li data-reveal><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Keine Doppelten.</b> Was für den Zielmonat schon erstellt wurde, lässt sich nicht nochmals wählen.</span></li>
+          <li data-reveal><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Immer als Entwurf.</b> Nichts wird verschickt, bevor du es in Bexio freigibst.</span></li>
+        </ul>
+        <div class="lp-serie-actions" data-reveal>
+          <a href="login.html#register" class="lp-btn lp-btn-primary lp-btn-lg">Serienrechnungen testen <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          <span>Im Abo inbegriffen, auch in der Testphase.</span>
+        </div>
+      </div>
+
+      <div class="lp-serie-visual" data-reveal>
+        <div class="lp-sr" role="img" aria-label="Beispiel: Drei Rechnungen aus Oktober werden als Entwürfe für November vorbereitet, eine ist bereits erstellt.">
+          <div class="lp-sr-head" aria-hidden="true">
+            <span class="lp-sr-month">Oktober 2026</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg><span class="lp-sr-month on">November 2026</span>
+          </div>
+          <ul class="lp-sr-rows" aria-hidden="true">
+            <li><i class="lp-sr-box on"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></i><span><b>Bäckerei Frei AG</b><small>Wartung Kühlanlage <s>Oktober</s> <mark>November</mark></small></span><em>CHF 480.00</em></li>
+            <li><i class="lp-sr-box on"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></i><span><b>Praxis Dr. Moser</b><small>Reinigung <s>Oktober</s> <mark>November</mark></small></span><em>CHF 1'250.00</em></li>
+            <li><i class="lp-sr-box on"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></i><span><b>Garage Lüthi GmbH</b><small>Buchhaltung <s>Oktober</s> <mark>November</mark></small></span><em>CHF 690.00</em></li>
+            <li class="done"><i class="lp-sr-box"></i><span><b>Hotel Bären</b><small>Bereits erstellt: RE-00057 (Entwurf)</small></span><em>CHF 2'100.00</em></li>
+          </ul>
+          <div class="lp-sr-foot" aria-hidden="true">
+            <span><b>3 ausgewählt</b> · CHF 2'420.00</span>
+            <span class="lp-sr-btn">In Bexio erstellen</span>
+          </div>
+        </div>
+        <p class="lp-visual-note">Beispiel zur Veranschaulichung</p>
+      </div>
     </div>
   </section>
 
@@ -337,6 +392,7 @@
           <div class="lp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg></div>
           <h3>Serienrechnungen</h3>
           <p>Wiederkehrende Rechnungen eines Monats als Vorlage nehmen und für den neuen Monat als Entwürfe anlegen&nbsp;— mit Vorschau, was sich ändert.</p>
+          <a href="#serienrechnungen" class="lp-card-link">Mehr dazu <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
           <div class="lp-months" aria-hidden="true"><span>Oktober</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg><span class="on">November</span></div>
         </article>
         <article class="lp-card lp-card-row" data-reveal>
@@ -424,7 +480,8 @@
           <ul>
             <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>14 Tage kostenlos</li>
             <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Unbegrenzte Rechnungen &amp; Angebote</li>
-            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Bexio-Integration &amp; Serienrechnungen</li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Bexio-Integration</li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Serienrechnungen inklusive</li>
             <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Jederzeit kündbar</li>
           </ul>
           <a href="login.html#register" class="lp-btn lp-btn-outline lp-btn-block">Gratis starten</a>
@@ -437,7 +494,8 @@
           <ul>
             <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>14 Tage kostenlos</li>
             <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Unbegrenzte Rechnungen &amp; Angebote</li>
-            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Bexio-Integration &amp; Serienrechnungen</li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Bexio-Integration</li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Serienrechnungen inklusive</li>
             <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>CHF 29 günstiger pro Jahr</li>
           </ul>
           <a href="login.html#register" class="lp-btn lp-btn-primary lp-btn-block">Gratis starten</a>
@@ -478,6 +536,18 @@
             Du wirst auf Bexio weitergeleitet und autorisierst WhatsBill per OAuth —
             wir speichern niemals dein Bexio-Passwort. Die Verbindung kannst du
             jederzeit trennen.
+          </p>
+        </details>
+
+        <details class="faq-item">
+          <summary>Was sind Serienrechnungen?</summary>
+          <p>
+            Im Dashboard wählst du einen Zeitraum, zum Beispiel den letzten Monat.
+            WhatsBill zeigt dir die Rechnungen daraus als Vorschau und legt die
+            ausgewählten für den neuen Monat als <strong>Entwürfe</strong> in Bexio an.
+            Monatsnamen im Text werden angepasst, bereits erstellte Rechnungen
+            werden nicht doppelt angelegt. Serienrechnungen sind im Abo und in der
+            Testphase inbegriffen.
           </p>
         </details>
 
@@ -578,6 +648,6 @@
     </div>
   </footer>
 
-  <script src="js/landing.js?v=1"></script>
+  <script src="js/landing.js?v=2"></script>
 </body>
 </html>

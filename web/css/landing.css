@@ -144,6 +144,19 @@ body.lp {
 .lp-trust li { display: inline-flex; align-items: center; gap: 7px; }
 .lp-trust svg { width: 16px; height: 16px; color: var(--lp-green); stroke-width: 3; }
 
+.lp-new {
+  display: inline-flex; align-items: center; gap: 10px; margin: 14px 0 0;
+  padding: 5px 14px 5px 5px; border-radius: 999px;
+  background: rgba(234, 243, 236, .07); border: 1px solid rgba(234, 243, 236, .16);
+  color: var(--lp-on-dark); font-size: 13.5px; font-weight: 500; text-decoration: none;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.lp-new:hover { background: rgba(234, 243, 236, .12); border-color: rgba(234, 243, 236, .32); }
+.lp-new b { padding: 3px 10px; border-radius: 999px; background: var(--lp-green); color: #04220F; font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.lp-new svg { width: 15px; height: 15px; color: var(--lp-green); transition: transform .15s ease; }
+.lp-new:hover svg { transform: translateX(3px); }
+.lp-eyebrow + .lp-new { display: flex; width: fit-content; max-width: 100%; }
+
 /* ===== Telefon ===== */
 .lp-hero-visual { position: relative; justify-self: center; width: min(100%, 370px); }
 .lp-phone {
@@ -258,6 +271,50 @@ body.lp {
 .lp-steps li:not(:last-child)::after {
   content: ""; position: absolute; top: 53px; right: -21px; width: 21px; height: 2px; background: var(--lp-line);
 }
+
+/* ===== Serienrechnungen (eigener Abschnitt) ===== */
+.lp-serie { position: relative; isolation: isolate; overflow: hidden; background: var(--lp-ink); color: var(--lp-on-dark); padding: 112px 0; }
+.lp-serie .lp-hero-glow { right: auto; left: -320px; top: auto; bottom: -420px; }
+.lp-serie-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 64px; align-items: center; }
+.lp-serie .lp-kicker { color: var(--lp-green); }
+.lp-serie .lp-h2 { color: #fff; }
+.lp-serie-lead { margin-top: 20px; max-width: 34em; font-size: 18px; line-height: 1.6; color: var(--lp-on-dark-muted); }
+.lp-serie-list { list-style: none; display: grid; gap: 16px; margin-top: 30px; }
+.lp-serie-list li { display: flex; align-items: flex-start; gap: 14px; font-size: 16px; line-height: 1.5; color: var(--lp-on-dark-muted); }
+.lp-serie-list b { color: #fff; font-weight: 650; }
+.lp-serie-list svg { flex: none; width: 26px; height: 26px; padding: 6px; margin-top: 1px; border-radius: 50%; background: var(--lp-green); color: #04220F; stroke-width: 3; }
+.lp-serie-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; margin-top: 36px; }
+.lp-serie-actions span { font-size: 14px; color: var(--lp-on-dark-muted); }
+
+.lp-serie-visual { position: relative; }
+.lp-sr {
+  border-radius: 24px; background: var(--lp-white); color: var(--lp-text); padding: 22px;
+  box-shadow: 0 0 0 1px rgba(234, 243, 236, .14), 0 50px 90px -30px rgba(0, 0, 0, .8), 0 0 120px -30px rgba(37, 211, 102, .45);
+  transform: rotate(-1.5deg);
+}
+.lp-sr-head { display: flex; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--lp-line); color: var(--lp-muted); }
+.lp-sr-head svg { width: 20px; height: 20px; }
+.lp-sr-month { padding: 8px 14px; border-radius: 12px; border: 1px dashed #C9D2CB; font-size: 14.5px; font-weight: 700; color: var(--lp-muted); }
+.lp-sr-month.on { border: 1px solid var(--lp-green); background: var(--lp-mint); color: var(--lp-green-ink); }
+.lp-sr-rows { list-style: none; }
+.lp-sr-rows li { display: flex; align-items: center; gap: 14px; padding: 15px 2px; border-bottom: 1px solid var(--lp-line); }
+.lp-sr-rows li > span { flex: 1; min-width: 0; }
+.lp-sr-rows b { display: block; font-size: 15.5px; line-height: 1.3; }
+.lp-sr-rows small { display: block; margin-top: 2px; font-size: 13.5px; color: var(--lp-muted); }
+.lp-sr-rows s { color: #9AA59E; }
+.lp-sr-rows mark { padding: 1px 6px; border-radius: 6px; background: var(--lp-mint); color: var(--lp-green-ink); font-weight: 700; }
+.lp-sr-rows em { font-style: normal; font-weight: 700; font-size: 15px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lp-sr-rows li.done { opacity: .5; }
+.lp-sr-box { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; border: 2px solid #C9D2CB; }
+.lp-sr-box.on { border-color: var(--lp-green-deep); background: var(--lp-green-deep); color: #fff; }
+.lp-sr-box svg { width: 15px; height: 15px; stroke-width: 3.2; }
+.lp-sr-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-top: 18px; font-size: 14.5px; color: var(--lp-muted); }
+.lp-sr-foot b { color: var(--lp-text); }
+.lp-sr-btn { padding: 11px 18px; border-radius: 999px; background: var(--lp-green); color: #04220F; font-weight: 700; white-space: nowrap; box-shadow: 0 8px 24px -8px rgba(37, 211, 102, .7); }
+
+.lp-card-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; color: #fff; font-weight: 700; font-size: 15px; text-decoration: none; }
+.lp-card-link svg { width: 17px; height: 17px; transition: transform .15s ease; }
+.lp-card-link:hover svg { transform: translateX(3px); }
 
 /* ===== Karten / Bento ===== */
 .lp-bento { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-top: 52px; }
@@ -389,6 +446,9 @@ body.lp {
   .lp-stat:nth-child(n+3) { border-top: 1px solid rgba(234, 243, 236, .1); }
   .lp-section { padding: 76px 0; }
   .lp-steps, .lp-aud, .lp-versus { grid-template-columns: 1fr; }
+  .lp-serie { padding: 80px 0; }
+  .lp-serie-grid { grid-template-columns: 1fr; gap: 48px; }
+  .lp-sr { transform: none; }
   .lp-steps li:not(:last-child)::after { display: none; }
   .lp-pricing { grid-template-columns: minmax(0, 440px); }
   .lp-footer-grid { grid-template-columns: 1fr 1fr; }
@@ -407,6 +467,14 @@ body.lp {
   .lp-float-b { right: -8px; top: 76px; }
   .lp-stat { padding: 20px 16px; }
   .lp-vs, .lp-price { padding: 26px 22px; }
+  .lp-new { font-size: 12.5px; }
+  .lp-sr { padding: 16px; border-radius: 20px; }
+  .lp-sr-month { padding: 7px 10px; font-size: 13px; }
+  .lp-sr-rows li { gap: 10px; }
+  .lp-sr-rows em { font-size: 13.5px; }
+  .lp-sr-foot { flex-direction: column; align-items: stretch; text-align: center; }
+  .lp-sr-btn { text-align: center; }
+  .lp-serie-actions .lp-btn { width: 100%; }
   .lp-price-n { font-size: 58px; }
   .lp .faq-item summary { padding: 18px; font-size: 16px; }
   .lp .faq-item p { padding: 0 18px 18px; }
