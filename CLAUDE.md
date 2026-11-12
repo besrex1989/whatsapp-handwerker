@@ -109,6 +109,12 @@ Frontend-Code während des Deploy-Fensters nicht bricht.
 - Die `tenants`-Policies matchen immer `lower(email) = lower(auth.jwt() ->> 'email')`.
 - Neue Spalten mit sensiblen Tokens (Bexio, Stripe) **nie** für `anon`
   selectable machen.
+- RLS regelt nur Zeilen, nicht Spalten. Welche `tenants`-Spalten ein
+  angemeldeter User schreiben darf, steht als Spalten-Grant in Migration
+  `017_…` (Name, WhatsApp-Nummer, Bexio-Verbindung). Schreibt das Frontend
+  eine weitere Spalte, braucht es eine neue Migration mit `grant update
+  (spalte)`. `plan`, `trial_ends_at`, Stripe- und Abo-Spalten bleiben dem
+  Service-Role vorbehalten.
 
 ### Edge Functions: Aufrufer prüfen
 - Alle Functions werden mit `--no-verify-jwt` deployt, sind also ohne Token

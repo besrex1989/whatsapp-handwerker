@@ -9,7 +9,7 @@
 // the tenant row.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { requireTenantOwner } from "../_shared/tenant-auth.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0?target=denonext";
 
 const CORS_HEADERS = {
@@ -39,29 +39,11 @@ serve(async (req) => {
     const { tenant_id } = body;
     if (!tenant_id) return jsonError("tenant_id ist erforderlich", 400);
 
-    // Verify the caller owns this tenant via their JWT.
-    const authHeader = req.headers.get("Authorization") || "";
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
-    const { data: userResp } = await supabase.auth.getUser();
-    const user = userResp?.user;
-    if (!user) return jsonError("Nicht angemeldet.", 401);
-
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
-    const { data: tenant } = await admin
-      .from("tenants")
-      .select("id, email, stripe_customer_id")
-      .eq("id", tenant_id)
-      .single();
-
-    if (!tenant) return jsonError("Tenant nicht gefunden.", 404);
-    if (tenant.email !== user.email) return jsonError("Zugriff verweigert.", 403);
+    // Aufrufer muss angemeldet sein und der Tenant muss ihm gehören
+    // (E-Mail-Vergleich ohne Gross-/Kleinschreibung).
+    const auth = await requireTenantOwner(req, tenant_id, "id, email, stripe_customer_id");
+    if ("response" in auth) return auth.response;
+    const tenant = auth.tenant;
     if (!tenant.stripe_customer_id) {
       return new Response(JSON.stringify({ invoices: [] }), {
         status: 200,
