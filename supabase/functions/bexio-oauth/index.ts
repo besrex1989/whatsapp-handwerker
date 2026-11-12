@@ -1,8 +1,34 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { requireTenantOwner } from "../_shared/tenant-auth.ts";
+import { signState, verifyState } from "../_shared/oauth-state.ts";
+
+// Sicherheit: Die Function wird mit --no-verify-jwt deployed, ist also ohne
+// Login erreichbar. Beide Einstiege prüfen deshalb selbst:
+//   POST  — Aufrufer ist angemeldet und der Tenant gehört ihm. Der `state`
+//           ist signiert (Tenant-ID + Ablauf, HMAC) und 15 Minuten gültig.
+//   GET   — `state` ist echt und nicht abgelaufen UND der Aufrufer ist
+//           angemeldet und Besitzer des Tenants im `state`. Erst danach
+//           wird der Code getauscht und gespeichert.
+// So kann niemand einem fremden Tenant ein Bexio unterschieben, und ein
+// fremdes Bexio lässt sich nicht an den eigenen Tenant binden.
 
 // Bexio migrated from idp.bexio.com to auth.bexio.com (Keycloak)
 const BEXIO_TOKEN_URL = "https://auth.bexio.com/realms/bexio/protocol/openid-connect/token";
+
+// Secret für die state-Signatur. BEXIO_CLIENT_SECRET ist ohnehin gesetzt
+// (ohne es funktioniert der Flow nicht); oauth-state.ts trennt die
+// Verwendung über einen festen Kontext-String.
+function stateSecret(): string {
+  return Deno.env.get("BEXIO_CLIENT_SECRET") || "";
+}
+
+function jsonResp(obj: unknown, status: number): Response {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+  });
+}
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -22,7 +48,7 @@ serve(async (req) => {
   // Handle OAuth callback: GET /bexio-oauth?code=xxx&state=tenant_id&redirect_uri=xxx
   if (req.method === "GET") {
     const code = url.searchParams.get("code");
-    const state = url.searchParams.get("state"); // tenant_id
+    const state = url.searchParams.get("state"); // signiert, siehe oauth-state.ts
     const redirectUri = url.searchParams.get("redirect_uri")
       || Deno.env.get("SUPABASE_URL") + "/functions/v1/bexio-oauth";
 
@@ -32,6 +58,20 @@ serve(async (req) => {
         headers: CORS_HEADERS,
       });
     }
+
+    const checked = await verifyState(state, stateSecret());
+    if (!checked.ok) {
+      return jsonResp({
+        error: checked.reason === "expired"
+          ? "Die Bexio-Anfrage ist abgelaufen. Bitte im Dashboard erneut auf «Bexio verbinden» klicken."
+          : "Ungültige Bexio-Anfrage. Bitte im Dashboard erneut auf «Bexio verbinden» klicken.",
+        error_code: checked.reason === "expired" ? "state_expired" : "state_invalid",
+      }, 400);
+    }
+    const tenantId = checked.tenantId;
+
+    const auth = await requireTenantOwner(req, tenantId, "id, email");
+    if ("response" in auth) return auth.response;
 
     try {
       // Exchange code for tokens
@@ -64,7 +104,7 @@ serve(async (req) => {
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
       );
 
-      await supabase
+      const upd = await supabase
         .from("tenants")
         .update({
           bexio_access_token: tokens.access_token,
@@ -78,7 +118,11 @@ serve(async (req) => {
           bexio_tax_id: null,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", state);
+        .eq("id", tenantId);
+      if (upd.error) {
+        console.error("[Bexio OAuth] Tenant update failed:", upd.error.message);
+        return jsonResp({ error: "Bexio-Verbindung konnte nicht gespeichert werden." }, 500);
+      }
 
       return new Response(
         JSON.stringify({ success: true, message: "Bexio erfolgreich verbunden!" }),
@@ -108,6 +152,9 @@ serve(async (req) => {
       });
     }
 
+    const auth = await requireTenantOwner(req, tenant_id, "id, email");
+    if ("response" in auth) return auth.response;
+
     // Prefer the caller-supplied redirect_uri (e.g. the Vercel callback page
     // that Bexio has registered). Fall back to the Edge Function URL.
     const effectiveRedirect = redirect_uri
@@ -118,7 +165,7 @@ serve(async (req) => {
       redirect_uri: effectiveRedirect,
       response_type: "code",
       scope: "openid profile offline_access contact_show contact_edit kb_invoice_edit kb_offer_edit article_show accounting",
-      state: tenant_id,
+      state: await signState(auth.tenant.id, stateSecret()),
     });
 
     const authUrl = `https://auth.bexio.com/realms/bexio/protocol/openid-connect/auth?${params}`;

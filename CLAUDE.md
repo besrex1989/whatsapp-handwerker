@@ -51,8 +51,6 @@ supabase/
     stripe-portal/         # Öffnet Stripe Customer Portal
     stripe-webhook/        # Empfängt Stripe-Events → aktualisiert tenants
     stripe-invoices/       # Listet Rechnungen im Dashboard
-    whatsapp-register/     # Registriert Tenant-Nummer bei Meta Cloud
-    whatsapp-subscribe-app/# Abonniert WABA an die App
   migrations/              # SQL-Migrationen (NICHT rückdatieren — immer
                            # neue Nummer anhängen)
 .github/workflows/         # CI (siehe unten)
@@ -119,6 +117,12 @@ Frontend-Code während des Deploy-Fensters nicht bricht.
   `requireTenantOwner(req, tenantId)` aus `_shared/tenant-auth.ts`.
 - Das Frontend schickt dafür `Authorization: Bearer <session.access_token>`
   (nicht den anon-Key).
+- `bexio-oauth`: POST und Callback (GET) verlangen beide den Besitzer.
+  Der OAuth-`state` ist signiert und 15 Minuten gültig
+  (`_shared/oauth-state.ts`, Secret = `BEXIO_CLIENT_SECRET`).
+  `web/bexio-callback.html` schickt dafür das Session-Token mit und lädt
+  bewusst nicht `js/auth.js` (dessen Client würde bei
+  `?error_description=…` die Session verwerfen).
 
 ### Phone-Numbers
 - Intern immer E.164 (`+41…`). Normalisierung via `normalizePhoneCH()`

@@ -27,6 +27,7 @@
   <h2 id="status">Bexio wird verbunden...</h2>
   <p id="detail">Bitte warten.</p>
   <div id="debug" class="debug" style="display:none;"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script>
     (async function() {
       // Check query params AND hash fragment (some OAuth providers use fragments)
@@ -59,8 +60,47 @@
         return;
       }
 
+      function showError(title, detail) {
+        document.querySelector(".spinner").style.display = "none";
+        document.getElementById("status").textContent = title;
+        document.getElementById("detail").textContent = detail;
+      }
+
+      // Die Edge Function verlangt die Anmeldung des Tenant-Besitzers. Wir
+      // lesen die Session, die das Dashboard auf derselben Domain angelegt
+      // hat. Bewusst NICHT js/auth.js laden: dessen Client wertet die URL
+      // aus (detectSessionInUrl) und würde bei einem Bexio-Fehler
+      // (?error=…&error_description=…) die Session verwerfen. Werte
+      // identisch zu js/auth.js (der anon-Key ist öffentlich).
+      var SUPABASE_URL = "https://rdbislocgdraggiapxod.supabase.co";
+      var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkYmlzbG9jZ2RyYWdnaWFweG9kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5MDk2NDIsImV4cCI6MjA5MTQ4NTY0Mn0.xreLK3j-9rgW1xPS7G9-WCW7JqQiEgTdHTKsgUeEUJs";
+      var accessToken = null;
+      try {
+        var client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          auth: { detectSessionInUrl: false },
+        });
+        var sessionResult = await client.auth.getSession();
+        accessToken = sessionResult.data && sessionResult.data.session
+          ? sessionResult.data.session.access_token
+          : null;
+      } catch (sessErr) {
+        console.error("[bexio-callback] session error:", sessErr);
+      }
+
+      if (!accessToken) {
+        showError(
+          "Nicht angemeldet",
+          "Bexio konnte nicht verbunden werden, weil du in diesem Browser nicht bei WhatsBill angemeldet bist. "
+            + "Bitte melde dich an und klicke im Dashboard erneut auf «Bexio verbinden»."
+        );
+        var loginLink = document.createElement("p");
+        loginLink.innerHTML = '<a href="/login.html">Zur Anmeldung</a>';
+        document.getElementById("detail").after(loginLink);
+        return;
+      }
+
       // Call Supabase Edge Function to exchange code for tokens
-      var supabaseUrl = "https://rdbislocgdraggiapxod.supabase.co/functions/v1/bexio-oauth";
+      var supabaseUrl = SUPABASE_URL + "/functions/v1/bexio-oauth";
       var callbackUrl = window.location.origin + window.location.pathname;
       var fetchUrl = supabaseUrl
         + "?code=" + encodeURIComponent(code)
@@ -68,7 +108,12 @@
         + "&redirect_uri=" + encodeURIComponent(callbackUrl);
 
       try {
-        var resp = await fetch(fetchUrl);
+        var resp = await fetch(fetchUrl, {
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": "Bearer " + accessToken,
+          },
+        });
         document.querySelector(".spinner").style.display = "none";
         if (resp.ok) {
           document.getElementById("status").textContent = "Bexio erfolgreich verbunden!";
@@ -81,6 +126,16 @@
           }, 1500);
         } else {
           var errText = await resp.text();
+          // Fehler kommen als JSON { error } oder (ältere Pfade) als Text.
+          try {
+            var errJson = JSON.parse(errText);
+            if (errJson && errJson.error) errText = errJson.error;
+          } catch (_e) { /* plain text */ }
+          if (resp.status === 401) {
+            errText = "Deine Anmeldung ist abgelaufen. Bitte melde dich neu an und klicke im Dashboard erneut auf «Bexio verbinden».";
+          } else if (resp.status === 403) {
+            errText = "Diese Bexio-Anfrage gehört zu einem anderen WhatsBill-Konto. Bitte im Dashboard erneut auf «Bexio verbinden» klicken.";
+          }
           document.getElementById("status").textContent = "Fehler bei der Verbindung";
           document.getElementById("detail").textContent = errText || "Bitte versuche es erneut.";
         }
