@@ -66,9 +66,26 @@ serve(async (req) => {
     });
   } catch (err) {
     console.error("[stripe-portal] Error:", err);
+    // Die gespeicherte Stripe-Kundennummer existiert im verwendeten
+    // Stripe-Konto nicht (z. B. im Testmodus angelegt, Function läuft live,
+    // oder Kunde in Stripe gelöscht). Verständliche Meldung statt des
+    // internen Stripe-Texts mit Kundennummer.
+    if (isMissingStripeCustomer(err)) {
+      return jsonError(
+        "Zu diesem Konto wurden bei Stripe keine Abo-Daten gefunden. "
+          + "Bitte melde dich beim Support (info@whatsbill.ch).",
+        404,
+      );
+    }
     return jsonError("Interner Fehler: " + (err?.message || String(err)), 500);
   }
 });
+
+function isMissingStripeCustomer(err: unknown): boolean {
+  const e = err as { code?: string; param?: string; message?: string } | null;
+  return e?.code === "resource_missing"
+    && (e?.param === "customer" || /no such customer/i.test(e?.message || ""));
+}
 
 function jsonError(message: string, status: number): Response {
   return new Response(JSON.stringify({ error: message }), {
