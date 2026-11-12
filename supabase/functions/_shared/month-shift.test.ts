@@ -99,3 +99,33 @@ test("parseMonth", () => {
   assert.equal(parseMonth("2026-13"), null);
   assert.equal(parseMonth("10/2026"), null);
 });
+
+test("Zeiträume über mehrere Monate (Quartalsrechnungen)", () => {
+  eq("Treuhanddienstleistungen Okt-Dez 2026", "Treuhanddienstleistungen Jan-Mär 2027", OKT, JAN27);
+  eq("Okt. - Dez. 2026", "Jan. - Mär. 2027", OKT, JAN27);
+  eq("Oktober bis Dezember 2026", "Januar bis März 2027", OKT, JAN27);
+  eq("Oktober 2026 – Dezember 2026", "Januar 2027 – März 2027", OKT, JAN27);
+  eq("Okt-Dez", "Jan-Mär", OKT, JAN27);
+  eq("Okt/Nov 2026", "Nov/Dez 2026");
+  eq("Okt-Dez 2026", "Nov-Jan 2027");
+  eq("Nov-Jan 2027", "Dez-Feb 2027", NOV, DEZ);
+  eq("Honorar Okt-Dez 2025", "Honorar Okt-Dez 2025", OKT, JAN27);
+  eq("Jul-Sep 2026", "Jul-Sep 2026", OKT, JAN27);
+  eq("Apr-Jun 2026", "Mai-Jul 2026", { year: 2026, month: 4 }, { year: 2026, month: 5 });
+});
+
+test("Datumsbereiche über mehrere Monate", () => {
+  eq("01.10.2026 – 31.12.2026", "01.01.2027 – 31.03.2027", OKT, JAN27);
+  eq("01.10. bis 31.12.2026", "01.01. bis 31.03.2027", OKT, JAN27);
+  eq("01.10.26-31.12.26", "01.01.27-31.03.27", OKT, JAN27);
+  eq("01.10.2026 – 30.11.2026", "01.11.2026 – 31.12.2026");
+  eq("15.10.2026 - 14.11.2026", "15.11.2026 - 14.12.2026");
+});
+
+test("Quartale", () => {
+  eq("Buchhaltung Q4 2026", "Buchhaltung Q1 2027", OKT, JAN27);
+  eq("4. Quartal 2026", "1. Quartal 2027", OKT, JAN27);
+  eq("Q4/2026", "Q1/2027", OKT, JAN27);
+  eq("Q4 2026", "Q4 2026");
+  eq("Q3 2026", "Q3 2026", OKT, JAN27);
+});
