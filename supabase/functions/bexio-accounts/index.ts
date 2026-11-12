@@ -10,9 +10,14 @@
 //     -> { accounts: [{ id, account_no, name }], preferred_account_id }
 //   POST /bexio-accounts { tenant_id, account_id|null }
 //     -> { success: true }
+//
+// Auth: gültiges Supabase-User-JWT; die E-Mail im JWT muss zum Tenant
+// gehören (requireTenantOwner). Ohne diese Prüfung könnte jeder, der eine
+// Tenant-ID kennt, die Konten lesen und die Einstellung überschreiben.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { requireTenantOwner } from "../_shared/tenant-auth.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -64,12 +69,6 @@ async function getBexioToken(tenant: any): Promise<string> {
   return tokens.access_token;
 }
 
-async function loadTenant(tenantId: string): Promise<any> {
-  const res = await supabase.from("tenants").select("*").eq("id", tenantId).single();
-  if (res.error || !res.data) throw new Error("Tenant nicht gefunden.");
-  return res.data;
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: CORS_HEADERS });
@@ -79,10 +78,9 @@ serve(async (req) => {
     if (req.method === "GET") {
       const url = new URL(req.url);
       const tenantId = url.searchParams.get("tenant_id");
-      if (!tenantId) {
-        return json({ error: "tenant_id required" }, 400);
-      }
-      const tenant = await loadTenant(tenantId);
+      const auth = await requireTenantOwner(req, tenantId);
+      if ("response" in auth) return auth.response;
+      const tenant = auth.tenant;
       const token = await getBexioToken(tenant);
 
       const resp = await fetch("https://api.bexio.com/2.0/accounts", {
@@ -126,7 +124,8 @@ serve(async (req) => {
     if (req.method === "POST") {
       const body = await req.json().catch(() => ({}));
       const { tenant_id, account_id } = body;
-      if (!tenant_id) return json({ error: "tenant_id required" }, 400);
+      const auth = await requireTenantOwner(req, tenant_id, "id, email");
+      if ("response" in auth) return auth.response;
 
       // account_id may be null to clear the preference.
       const prefId = account_id == null ? null : Number(account_id);
