@@ -13,6 +13,8 @@
 //   - Datum                                           "31.10.2026", "1.10.26", "01.10."
 //   - Monat/Jahr                                      "10/2026", "10.2026", "10-2026"
 //   - Jahr-Monat                                      "2026-10"
+//   - Zeitraum ab Quellmonat                          "Okt-Dez 2026", "01.10.–31.12.2026"
+//   - Quartal (bei Verschiebung um ganze Quartale)    "Q4 2026", "4. Quartal 2026"
 //
 // Steht bei einer Angabe ein ANDERES Jahr als das Quell-Jahr ("Vertrag vom
 // 01.10.2024"), bleibt sie unverändert — sie meint nicht die Rechnungsperiode.
@@ -167,6 +169,155 @@ function shiftNames(text: string, src: MonthRef, dst: MonthRef): string {
   return out;
 }
 
+// ---------- Zeiträume über mehrere Monate ----------
+//
+// Quartals- und Mehrmonatsrechnungen: "Okt-Dez 2026" → "Jan-Mär 2027".
+// Beginnt ein Zeitraum im Quellmonat, wird auch sein Ende um die gleiche
+// Anzahl Monate verschoben. Ergebnisse werden als Platzhalter eingesetzt,
+// damit die späteren Einzel-Ersetzungen sie nicht ein zweites Mal treffen.
+
+interface MonthToken {
+  month: number; // 1–12
+  lang: string;
+  abbr: boolean;
+}
+
+const MONTH_TOKENS: Map<string, MonthToken> = (() => {
+  const map = new Map<string, MonthToken>();
+  for (const lang of Object.keys(NAMES)) {
+    NAMES[lang].forEach((name, i) => {
+      for (const v of [name, withEntities(name)]) {
+        const key = v.toLowerCase();
+        if (!map.has(key)) map.set(key, { month: i + 1, lang, abbr: false });
+      }
+    });
+  }
+  ABBR_DE.forEach((list, i) => {
+    for (const a of list) {
+      const key = a.toLowerCase();
+      if (!map.has(key)) map.set(key, { month: i + 1, lang: "de", abbr: true });
+    }
+  });
+  return map;
+})();
+
+const MONTH_ALT = Array.from(MONTH_TOKENS.keys())
+  .sort((a, b) => b.length - a.length)
+  .map(escapeRe)
+  .join("|");
+
+const RANGE_SEP = "(\\s*(?:-|–|—|&ndash;|&mdash;|\\/)\\s*|(?:\\s|&nbsp;)+(?:bis|und|à|au|to)(?:\\s|&nbsp;)+)";
+
+function monthDelta(src: MonthRef, dst: MonthRef): number {
+  return (dst.year - src.year) * 12 + (dst.month - src.month);
+}
+
+function renderMonthToken(found: string, token: MonthToken, month: number, dot: string): string {
+  let rep: string;
+  let keepDot = dot;
+  if (token.abbr) {
+    rep = ABBR_DE[month - 1][0];
+    // "Mai" hat keine Abkürzung mit Punkt.
+    if (rep.toLowerCase() === NAMES.de[month - 1].toLowerCase()) keepDot = "";
+  } else {
+    rep = NAMES[token.lang][month - 1];
+  }
+  rep = matchCase(found, rep);
+  if (found.indexOf("&") !== -1) rep = withEntities(rep);
+  return rep + keepDot;
+}
+
+function shiftRanges(text: string, src: MonthRef, dst: MonthRef, keep: (s: string) => string): string {
+  let out = text;
+  const delta = monthDelta(src, dst);
+
+  // Monatsnamen: "Okt-Dez 2026", "Oktober bis Dezember 2026", "Okt. 2026 – Jan. 2027".
+  const nameRe = new RegExp(
+    NOT_LETTER_BEFORE + "(" + MONTH_ALT + ")(\\.?)(?:((?:\\s|&nbsp;)+)(\\d{4}))?" + RANGE_SEP +
+      "(" + MONTH_ALT + ")(\\.?)" + NOT_LETTER_AFTER + YEAR_TAIL,
+    "giu",
+  );
+  out = out.replace(nameRe, (
+    all,
+    m1: string, dot1: string, sep1: string | undefined, y1: string | undefined,
+    sep: string,
+    m2: string, dot2: string, sep2: string | undefined, y2: string | undefined,
+  ) => {
+    const t1 = MONTH_TOKENS.get(m1.toLowerCase());
+    const t2 = MONTH_TOKENS.get(m2.toLowerCase());
+    if (!t1 || !t2 || t1.month !== src.month) return all;
+    const wraps = t2.month < t1.month;
+    let startYear: number | null = null;
+    if (y1 !== undefined) startYear = Number(y1);
+    else if (y2 !== undefined) startYear = Number(y2) - (wraps ? 1 : 0);
+    if (startYear !== null && startYear !== src.year) return all;
+
+    const baseYear = startYear === null ? src.year : startYear;
+    const startIdx = baseYear * 12 + (t1.month - 1) + delta;
+    const endIdx = (baseYear + (wraps ? 1 : 0)) * 12 + (t2.month - 1) + delta;
+    const newStart = renderMonthToken(m1, t1, (startIdx % 12) + 1, dot1);
+    const newEnd = renderMonthToken(m2, t2, (endIdx % 12) + 1, dot2);
+    return keep(
+      newStart + (y1 !== undefined ? sep1 + String(Math.floor(startIdx / 12)) : "") + sep +
+        newEnd + (y2 !== undefined ? sep2 + String(Math.floor(endIdx / 12)) : ""),
+    );
+  });
+
+  // Datumsbereiche: "01.10.2026 – 31.12.2026", "1.10. bis 31.12.2026".
+  const dateRe = new RegExp(
+    "(?<![\\d.])(\\d{1,2})\\.(0?" + src.month + ")\\.(\\d{4}|\\d{2})?" + RANGE_SEP +
+      "(\\d{1,2})\\.(\\d{1,2})\\.(\\d{4}|\\d{2})(?!\\d)",
+    "g",
+  );
+  out = out.replace(dateRe, (
+    all,
+    d1: string, mo1: string, y1: string | undefined, sep: string,
+    d2: string, mo2: string, y2: string,
+  ) => {
+    const day1 = Number(d1), day2 = Number(d2), month2 = Number(mo2);
+    if (day1 < 1 || day1 > 31 || day2 < 1 || day2 > 31 || month2 < 1 || month2 > 12) return all;
+    const fullYear = (y: string) => y.length === 4 ? Number(y) : 2000 + Number(y);
+    const endYear = fullYear(y2);
+    const startYear = y1 !== undefined ? fullYear(y1) : endYear - (month2 < src.month ? 1 : 0);
+    if (startYear !== src.year) return all;
+
+    const endIdx = endYear * 12 + (month2 - 1) + delta;
+    const newEnd = { year: Math.floor(endIdx / 12), month: (endIdx % 12) + 1 };
+    const newDay2 = shiftDay(day2, { year: endYear, month: month2 }, newEnd);
+    const fmtYear = (y: number, like: string) => like.length === 4 ? String(y) : String(y).slice(2);
+    return keep(
+      pad(shiftDay(day1, src, dst), d1.length) + "." + pad(dst.month, mo1.length) + "." +
+        (y1 !== undefined ? fmtYear(dst.year, y1) : "") + sep +
+        pad(newDay2, d2.length) + "." + pad(newEnd.month, mo2.length) + "." + fmtYear(newEnd.year, y2),
+    );
+  });
+
+  // Quartale: "Q4 2026", "4. Quartal 2026" — nur wenn um ganze Quartale
+  // verschoben wird.
+  if (delta % 3 === 0) {
+    const srcQ = Math.floor((src.month - 1) / 3) + 1;
+    const dstQ = Math.floor((dst.month - 1) / 3) + 1;
+    const qRe = new RegExp(
+      "(?<![\\p{L}\\d])(?:(Q)([1-4])|([1-4])(\\.\\s*Quartal))(?![\\p{L}\\d])(?:(\\s*\\/?\\s*|(?:\\s|&nbsp;)+)(\\d{4})(?!\\d))?",
+      "giu",
+    );
+    out = out.replace(qRe, (
+      all,
+      qLetter: string | undefined, qNum1: string | undefined,
+      qNum2: string | undefined, qWord: string | undefined,
+      sep: string | undefined, year: string | undefined,
+    ) => {
+      const q = Number(qNum1 !== undefined ? qNum1 : qNum2);
+      if (q !== srcQ) return all;
+      if (year !== undefined && Number(year) !== src.year) return all;
+      const head = qLetter !== undefined ? qLetter + String(dstQ) : String(dstQ) + qWord;
+      return keep(head + (year !== undefined ? sep + String(dst.year) : ""));
+    });
+  }
+
+  return out;
+}
+
 function shiftNumeric(text: string, src: MonthRef, dst: MonthRef): string {
   let out = text;
   const mm = "(0?" + src.month + ")";
@@ -210,7 +361,12 @@ export function shiftMonthText(text: string | null | undefined, src: MonthRef, d
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
     if (!part || part.charAt(0) === "<") continue;
-    parts[i] = shiftNames(shiftNumeric(part, src, dst), src, dst);
+    // Erst Zeiträume (als Platzhalter geschützt), dann Einzelangaben.
+    const kept: string[] = [];
+    const keep = (v: string) => "\u0000" + (kept.push(v) - 1) + "\u0000";
+    let shifted = shiftRanges(part, src, dst, keep);
+    shifted = shiftNames(shiftNumeric(shifted, src, dst), src, dst);
+    parts[i] = shifted.replace(/\u0000(\d+)\u0000/g, (_m, idx: string) => kept[Number(idx)]);
   }
   return parts.join("");
 }

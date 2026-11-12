@@ -6,6 +6,9 @@
 
 var _srData = null;
 
+// Auswahl: Rechnungs-ID → true/false. Nach dem Laden sind alle gewählt.
+var _srSelected = {};
+
 function srMonthString(date) {
   var m = date.getMonth() + 1;
   return date.getFullYear() + "-" + (m < 10 ? "0" + m : "" + m);
@@ -118,6 +121,9 @@ function srRenderInvoice(inv) {
 
   return '<details class="sr-item' + (inv.text_changed ? "" : " unchanged") + '">' +
     "<summary>" +
+    '<input type="checkbox" class="sr-check" aria-label="Rechnung auswählen" data-id="' + srEscape(inv.id) + '"' +
+    (_srSelected[inv.id] ? " checked" : "") +
+    ' onclick="event.stopPropagation()" onchange="srToggle(this)">' +
     '<div class="sr-item-contact">' + srEscape(inv.contact_name) +
     '<div class="sr-item-nr">Vorlage ' + srEscape(inv.document_nr) +
     (inv.status ? " · " + srEscape(inv.status) : "") + "</div></div>" +
@@ -174,7 +180,15 @@ function srRender() {
   }
 
   html += '<div class="sr-summary-actions">' +
-    '<button class="btn btn-primary" disabled title="Folgt im nächsten Schritt">In Bexio erstellen</button>' +
+    '<span id="sr-selection-info" class="sr-selection-info"></span>' +
+    '<button class="btn btn-outline sr-btn-small" onclick="srSelectAll(true)">Alle</button>' +
+    '<button class="btn btn-outline sr-btn-small" onclick="srSelectAll(false)">Keine</button>' +
+    (s.text_unchanged > 0 && s.text_changed > 0
+      ? '<button class="btn btn-outline sr-btn-small" onclick="srSelectChangedOnly()">Nur mit angepasstem Text</button>'
+      : "") +
+    "</div>";
+  html += '<div class="sr-summary-actions">' +
+    '<button id="sr-create-btn" class="btn btn-primary" disabled title="Folgt im nächsten Schritt">In Bexio erstellen</button>' +
     '<span class="help-text" style="margin-top: 0;">Das Erstellen folgt im nächsten Schritt. Aktuell nur Vorschau.</span>' +
     "</div>";
   if (s.text_unchanged > 0) {
@@ -192,6 +206,52 @@ function srRender() {
     items += srRenderInvoice(data.invoices[j]);
   }
   listEl.innerHTML = items;
+  srUpdateSelectionInfo();
+}
+
+// Zähler und Summe der Auswahl aktualisieren, ohne die Liste neu zu
+// zeichnen (aufgeklappte Rechnungen bleiben offen).
+function srUpdateSelectionInfo() {
+  if (!_srData) return;
+  var count = 0, sum = 0;
+  for (var i = 0; i < _srData.invoices.length; i++) {
+    var inv = _srData.invoices[i];
+    if (_srSelected[inv.id]) { count++; sum += Number(inv.total) || 0; }
+  }
+  var infoEl = document.getElementById("sr-selection-info");
+  if (infoEl) {
+    infoEl.textContent = count + " von " + _srData.invoices.length + " ausgewählt · Summe " + srFormatAmount(sum);
+  }
+  var btn = document.getElementById("sr-create-btn");
+  if (btn) {
+    btn.textContent = count === 1 ? "1 Rechnung in Bexio erstellen" : count + " Rechnungen in Bexio erstellen";
+  }
+}
+
+function srToggle(checkbox) {
+  _srSelected[checkbox.getAttribute("data-id")] = checkbox.checked;
+  srUpdateSelectionInfo();
+}
+
+function srApplySelection(fn) {
+  if (!_srData) return;
+  for (var i = 0; i < _srData.invoices.length; i++) {
+    var inv = _srData.invoices[i];
+    _srSelected[inv.id] = fn(inv);
+  }
+  var boxes = document.querySelectorAll(".sr-check");
+  for (var j = 0; j < boxes.length; j++) {
+    boxes[j].checked = !!_srSelected[boxes[j].getAttribute("data-id")];
+  }
+  srUpdateSelectionInfo();
+}
+
+function srSelectAll(value) {
+  srApplySelection(function () { return value; });
+}
+
+function srSelectChangedOnly() {
+  srApplySelection(function (inv) { return inv.text_changed; });
 }
 
 async function loadRecurringPreview() {
@@ -249,6 +309,8 @@ async function loadRecurringPreview() {
 
     srShowMessage("", false);
     _srData = data;
+    _srSelected = {};
+    for (var k = 0; k < data.invoices.length; k++) _srSelected[data.invoices[k].id] = true;
     srRender();
   } catch (err) {
     console.error("[loadRecurringPreview] exception:", err);
