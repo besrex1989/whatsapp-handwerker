@@ -10,6 +10,12 @@
 //     -> { accounts: [{ id, account_no, name }], preferred_account_id }
 //   POST /bexio-accounts { tenant_id, account_id|null }
 //     -> { success: true }
+//
+// Auth: requires a valid Supabase user JWT (Authorization: Bearer <access
+// token>); the JWT's email must match the tenant row (case-insensitive).
+// The function is deployed with --no-verify-jwt, so this check is the
+// only thing standing between the public internet and the tenant's data.
+// 401 = not signed in, 403 = signed in but not the tenant's owner.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -64,10 +70,43 @@ async function getBexioToken(tenant: any): Promise<string> {
   return tokens.access_token;
 }
 
-async function loadTenant(tenantId: string): Promise<any> {
-  const res = await supabase.from("tenants").select("*").eq("id", tenantId).single();
-  if (res.error || !res.data) throw new Error("Tenant nicht gefunden.");
-  return res.data;
+// Resolves the signed-in user from the request's Authorization header.
+// Returns null for a missing/invalid/expired token — and for the bare
+// anon key, which is a valid JWT but carries no user.
+async function getCaller(req: Request): Promise<any> {
+  const authHeader = req.headers.get("Authorization") || "";
+  if (!authHeader) return null;
+  const userClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } },
+  );
+  const { data } = await userClient.auth.getUser();
+  return data?.user || null;
+}
+
+// Authenticates the caller and loads the tenant they are asking for.
+// Returns either the tenant row or a ready-made error Response.
+async function authorizeTenant(
+  req: Request,
+  tenantId: string,
+): Promise<{ tenant?: any; error?: Response }> {
+  const user = await getCaller(req);
+  if (!user) return { error: json({ error: "Nicht angemeldet." }, 401) };
+
+  const res = await supabase.from("tenants").select("*").eq("id", tenantId).maybeSingle();
+  if (res.error || !res.data) {
+    return { error: json({ error: "Tenant nicht gefunden." }, 404) };
+  }
+
+  // Case-insensitive: tenant emails have historically had mixed case
+  // (see migration 013), auth emails are lower-cased by Supabase.
+  const tenantEmail = String(res.data.email || "").trim().toLowerCase();
+  const userEmail = String(user.email || "").trim().toLowerCase();
+  if (!tenantEmail || !userEmail || tenantEmail !== userEmail) {
+    return { error: json({ error: "Zugriff verweigert." }, 403) };
+  }
+  return { tenant: res.data };
 }
 
 serve(async (req) => {
@@ -82,7 +121,9 @@ serve(async (req) => {
       if (!tenantId) {
         return json({ error: "tenant_id required" }, 400);
       }
-      const tenant = await loadTenant(tenantId);
+      const auth = await authorizeTenant(req, tenantId);
+      if (auth.error) return auth.error;
+      const tenant = auth.tenant;
       const token = await getBexioToken(tenant);
 
       const resp = await fetch("https://api.bexio.com/2.0/accounts", {
@@ -128,6 +169,9 @@ serve(async (req) => {
       const { tenant_id, account_id } = body;
       if (!tenant_id) return json({ error: "tenant_id required" }, 400);
 
+      const auth = await authorizeTenant(req, String(tenant_id));
+      if (auth.error) return auth.error;
+
       // account_id may be null to clear the preference.
       const prefId = account_id == null ? null : Number(account_id);
       if (prefId != null && (!Number.isInteger(prefId) || prefId <= 0)) {
@@ -143,7 +187,7 @@ serve(async (req) => {
           bexio_account_id: null,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", tenant_id);
+        .eq("id", auth.tenant.id);
       if (upd.error) return json({ error: upd.error.message }, 500);
       return json({ success: true, preferred_account_id: prefId }, 200);
     }
