@@ -1,0 +1,254 @@
+/* Serienrechnungen — eigene Datei, weil css/style.css ein Jahr lang
+   immutable gecacht wird (vercel.json). Neue Regeln hier landen sofort
+   bei allen Usern. */
+
+.sr-back {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.sr-back:hover {
+  color: var(--text);
+}
+
+.sr-controls {
+  margin-bottom: 16px;
+}
+
+.sr-controls-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sr-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.sr-field input {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text);
+  background: white;
+  min-width: 170px;
+}
+
+.sr-arrow {
+  color: var(--text-muted);
+  padding-bottom: 9px;
+}
+
+.sr-message {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  font-size: 14px;
+  margin-bottom: 16px;
+  background: var(--bg-alt);
+}
+
+.sr-message.error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.sr-summary {
+  margin-bottom: 16px;
+}
+
+.sr-stats {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.sr-stat-value {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-stat-label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.sr-stat.warn .sr-stat-value {
+  color: #b45309;
+}
+
+.sr-summary-note {
+  margin-top: 14px;
+}
+
+.sr-summary-actions {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sr-filter {
+  font-size: 13px;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.sr-list {
+  padding-bottom: 48px;
+}
+
+.sr-item {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+
+.sr-item.unchanged {
+  border-left: 3px solid #d97706;
+}
+
+.sr-item > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 12px 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr) auto;
+  gap: 12px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.sr-item > summary::-webkit-details-marker {
+  display: none;
+}
+
+.sr-item-contact {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.sr-item-nr {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.sr-item-title {
+  overflow-wrap: anywhere;
+}
+
+.sr-item-total {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sr-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
+.sr-detail {
+  border-top: 1px solid var(--border);
+  padding: 4px 16px 14px;
+}
+
+.sr-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.sr-row:last-child {
+  border-bottom: none;
+}
+
+.sr-row.head {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: 10px 0 6px;
+}
+
+.sr-row-label {
+  color: var(--text-muted);
+}
+
+.sr-old {
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sr-new {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sr-new mark,
+.sr-item-title mark {
+  background: #dcfce7;
+  color: #166534;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+.sr-pos-meta {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .sr-item > summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .sr-item-title {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .sr-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .sr-row.head {
+    display: none;
+  }
+
+  .sr-field input {
+    min-width: 0;
+  }
+}
