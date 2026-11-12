@@ -10,7 +10,7 @@
 // upgrade another tenant's subscription.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { requireTenantOwner } from "../_shared/tenant-auth.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0?target=denonext";
 
 const CORS_HEADERS = {
@@ -56,35 +56,11 @@ serve(async (req) => {
       return jsonError(`Stripe Price-ID für Plan '${plan}' nicht konfiguriert.`, 500);
     }
 
-    // Verify the caller owns this tenant. We use the anon client with the
-    // user's JWT so RLS kicks in and we only see the tenant belonging to
-    // this email address.
-    const authHeader = req.headers.get("Authorization") || "";
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
-
-    const { data: userResp } = await supabase.auth.getUser();
-    const user = userResp?.user;
-    if (!user) return jsonError("Nicht angemeldet.", 401);
-
-    // Use service role to read/write the tenant (RLS-agnostic), but only
-    // after we confirmed the JWT belongs to a real user above.
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
-
-    const { data: tenant, error: tenantErr } = await admin
-      .from("tenants")
-      .select("id, email, full_name, stripe_customer_id")
-      .eq("id", tenant_id)
-      .single();
-
-    if (tenantErr || !tenant) return jsonError("Tenant nicht gefunden.", 404);
-    if (tenant.email !== user.email) return jsonError("Zugriff verweigert.", 403);
+    // Aufrufer muss angemeldet sein und der Tenant muss ihm gehören
+    // (E-Mail-Vergleich ohne Gross-/Kleinschreibung).
+    const auth = await requireTenantOwner(req, tenant_id, "id, email, full_name, stripe_customer_id");
+    if ("response" in auth) return auth.response;
+    const tenant = auth.tenant;
 
     // Re-use an existing Stripe customer if we already created one for this
     // tenant, otherwise let Checkout create one via customer_email.

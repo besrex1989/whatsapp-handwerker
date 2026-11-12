@@ -67,12 +67,24 @@ serve(async (req) => {
     );
 
     // Load tenant by case-insensitive email match (same as dashboard.js).
-    const { data: tenant } = await admin
+    // The email is a LIKE pattern here: `_`, `%` and `\` are escaped, and
+    // because PostgREST additionally treats `*` as a wildcard we only
+    // accept a row whose email equals the caller's exactly (ignoring
+    // case). Without this, an address like a_b@x.ch would also match
+    // axb@x.ch and delete a stranger's account.
+    const wanted = user.email.toLowerCase();
+    const { data: candidates, error: lookupErr } = await admin
       .from("tenants")
       .select("id, email, stripe_subscription_id")
-      .ilike("email", user.email)
-      .limit(1)
-      .maybeSingle();
+      .ilike("email", user.email.replace(/[\\%_]/g, "\\$&"))
+      .limit(50);
+    if (lookupErr) {
+      console.error("[delete-account] tenant lookup failed:", lookupErr);
+      return jsonError("Konto konnte nicht geladen werden.", 500);
+    }
+    const tenant = (candidates || []).find(
+      (t: any) => String(t.email || "").toLowerCase() === wanted,
+    ) || null;
 
     // 1) Stripe — best-effort immediate cancel.
     if (tenant?.stripe_subscription_id) {
