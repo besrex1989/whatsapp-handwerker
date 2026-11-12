@@ -134,6 +134,48 @@ function srRenderInvoice(inv) {
     "</details>";
 }
 
+// Abgleich mit Bexio: zeigt, was die Schnittstelle insgesamt geliefert
+// hat und welche Rechnungen laut Schnittstelle nicht im Vorlagemonat
+// liegen. Hilft, wenn in Bexio mehr Rechnungen sichtbar sind als hier.
+function srRenderDiagnostics(data) {
+  var d = data.diagnostics;
+  if (!d) return "";
+
+  var months = Object.keys(d.by_month || {}).sort().reverse();
+  var monthRows = "";
+  for (var i = 0; i < months.length; i++) {
+    var label = /^\d{4}-\d{2}$/.test(months[i]) ? srMonthLabel(months[i]) : months[i];
+    monthRows += "<tr><td>" + srEscape(label) + '</td><td class="num">' + d.by_month[months[i]] + "</td></tr>";
+  }
+
+  var outsideRows = "";
+  var outside = d.outside || [];
+  for (var j = 0; j < outside.length; j++) {
+    var o = outside[j];
+    outsideRows += "<tr><td>" + srEscape(o.document_nr) + "</td><td>" + srEscape(srFormatDate(o.date)) +
+      "</td><td>" + srEscape(o.status) + "</td><td>" + srEscape(srHtmlToText(o.title)) +
+      '</td><td class="num">' + srEscape(srFormatAmount(o.total)) + "</td></tr>";
+  }
+
+  var html = '<details class="sr-diag"><summary>Abgleich mit Bexio</summary>' +
+    '<p class="help-text">Bexio hat über die Schnittstelle insgesamt <strong>' + d.list_total +
+    "</strong> Rechnung(en) geliefert, davon <strong>" + d.in_month_list + "</strong> mit Rechnungsdatum im " +
+    srEscape(srMonthLabel(data.source_month)) + " (inkl. stornierte). Die Bexio-Suche fand " +
+    d.in_month_search + "." + (d.list_truncated ? " Die Liste wurde wegen ihrer Grösse gekürzt." : "") + "</p>";
+
+  if (monthRows) {
+    html += '<table class="sr-diag-table"><thead><tr><th>Rechnungsdatum im</th><th class="num">Anzahl</th></tr></thead><tbody>' +
+      monthRows + "</tbody></table>";
+  }
+  if (outsideRows) {
+    html += '<p class="help-text">Rechnungen, die laut Schnittstelle nicht im ' +
+      srEscape(srMonthLabel(data.source_month)) + " liegen:</p>" +
+      '<table class="sr-diag-table"><thead><tr><th>Nr.</th><th>Datum</th><th>Status</th><th>Titel</th><th class="num">Total</th></tr></thead><tbody>' +
+      outsideRows + "</tbody></table>";
+  }
+  return html + "</details>";
+}
+
 function srRender() {
   var summaryEl = document.getElementById("sr-summary");
   var listEl = document.getElementById("sr-list");
@@ -196,6 +238,8 @@ function srRender() {
       '<input type="checkbox" id="sr-only-unchanged"' + (onlyUnchanged ? " checked" : "") +
       ' onchange="srRender()"> Nur Rechnungen ohne erkannten Monat anzeigen</label></div>';
   }
+
+  html += srRenderDiagnostics(data);
 
   summaryEl.innerHTML = html;
   summaryEl.style.display = "block";
