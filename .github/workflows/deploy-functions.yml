@@ -32,7 +32,7 @@ jobs:
             # Skip the shared helpers directory (not a deployable function)
             if [ "$name" = "_shared" ]; then continue; fi
             echo "=== Deploying $name ==="
-            supabase functions deploy "$name" --no-verify-jwt
+            supabase functions deploy "$name" --no-verify-jwt --yes
           done
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
