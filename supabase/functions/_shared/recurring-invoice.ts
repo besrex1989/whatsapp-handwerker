@@ -178,7 +178,8 @@ export function buildPreview(
   const header = pair(inv.header || "", shiftMonthText(inv.header, src, dst));
   const footer = pair(inv.footer || "", shiftMonthText(inv.footer, src, dst));
 
-  const positions = (Array.isArray(inv.positions) ? inv.positions : [])
+  const positions = flattenPositions(inv)
+    .map((node) => node.position)
     .filter((p: any) => typeof p.text === "string" && p.text !== "")
     .map((p: any) => ({
       type: p.type,
@@ -231,30 +232,86 @@ function copyIfSet(target: Record<string, unknown>, source: any, keys: string[])
   }
 }
 
-function buildPosition(p: any, src: MonthRef, dst: MonthRef): Record<string, unknown> {
-  // Unterpositionen verweisen über parent_id auf die ID einer anderen
-  // Position der ALTEN Rechnung — lässt sich in einem Aufruf nicht
-  // sauber übertragen. Lieber ablehnen als falsch kopieren.
-  if (p.parent_id !== undefined && p.parent_id !== null) {
-    throw new UnsupportedInvoiceError("Rechnung enthält Unterpositionen – bitte in Bexio von Hand kopieren.");
+// ---------- Positionen ----------
+//
+// Bexio kennt Gruppen («Unterpositionen», KbPositionSubposition): ein
+// Container mit Text, dessen Kinder über parent_id auf ihn verweisen.
+// Je nach Endpunkt liefert Bexio die Kinder flach (parent_id) oder
+// verschachtelt (`positions` im Container) — beides wird verstanden.
+
+export interface PositionNode {
+  position: any;
+  oldId: number | null;
+  parentOldId: number | null;
+}
+
+// Alle Positionen in Dokument-Reihenfolge: Container, dann seine Kinder.
+export function flattenPositions(inv: any): PositionNode[] {
+  const all: PositionNode[] = [];
+  const collect = (list: any[], inheritedParent: number | null) => {
+    for (const p of list) {
+      const parentOldId = p.parent_id !== undefined && p.parent_id !== null ? Number(p.parent_id) : inheritedParent;
+      const oldId = p.id !== undefined && p.id !== null ? Number(p.id) : null;
+      all.push({ position: p, oldId, parentOldId });
+      if (Array.isArray(p.positions)) collect(p.positions, oldId);
+    }
+  };
+  collect(Array.isArray(inv.positions) ? inv.positions : [], null);
+
+  // Kinder direkt hinter ihren Container sortieren (bei flacher Lieferung
+  // stehen sie nicht zwingend dort).
+  const known = new Set(all.map((n) => n.oldId));
+  const childrenOf = new Map<number | null, PositionNode[]>();
+  for (const node of all) {
+    if (node.parentOldId !== null && !known.has(node.parentOldId)) {
+      throw new UnsupportedInvoiceError("Position verweist auf eine unbekannte Gruppe – bitte in Bexio von Hand kopieren.");
+    }
+    const list = childrenOf.get(node.parentOldId) || [];
+    list.push(node);
+    childrenOf.set(node.parentOldId, list);
   }
+  const ordered: PositionNode[] = [];
+  const visit = (parent: number | null, depth: number) => {
+    if (depth > 5) throw new UnsupportedInvoiceError("Zu tief verschachtelte Gruppen – bitte in Bexio von Hand kopieren.");
+    for (const node of childrenOf.get(parent) || []) {
+      ordered.push(node);
+      if (node.oldId !== null) visit(node.oldId, depth + 1);
+    }
+  };
+  visit(null, 0);
+  return ordered;
+}
+
+const POSITION_ENDPOINTS: Record<string, string> = {
+  KbPositionCustom: "kb_position_custom",
+  KbPositionArticle: "kb_position_article",
+  KbPositionText: "kb_position_text",
+  KbPositionSubtotal: "kb_position_subtotal",
+  KbPositionPagebreak: "kb_position_pagebreak",
+  KbPositionDiscount: "kb_position_discount",
+  KbPositionSubposition: "kb_position_subposition",
+};
+
+// Felder einer Position für die neue Rechnung (ohne type / parent_id).
+function buildPositionBody(p: any, src: MonthRef, dst: MonthRef): Record<string, unknown> {
   const text = shiftMonthText(p.text, src, dst);
   switch (p.type) {
     case "KbPositionCustom":
     case "KbPositionArticle": {
-      const out: Record<string, unknown> = { type: p.type, text };
+      const out: Record<string, unknown> = { text };
       copyIfSet(out, p, ["amount", "unit_id", "account_id", "tax_id", "unit_price", "discount_in_percent"]);
       if (p.type === "KbPositionArticle") copyIfSet(out, p, ["article_id"]);
       return out;
     }
     case "KbPositionText":
-      return { type: p.type, text, show_pos_nr: !!p.show_pos_nr };
+    case "KbPositionSubposition":
+      return { text, show_pos_nr: !!p.show_pos_nr };
     case "KbPositionSubtotal":
-      return { type: p.type, text };
+      return { text };
     case "KbPositionPagebreak":
-      return { type: p.type, pagebreak: true };
+      return { pagebreak: true };
     case "KbPositionDiscount":
-      return { type: p.type, text, is_percentual: !!p.is_percentual, value: p.value };
+      return { text, is_percentual: !!p.is_percentual, value: p.value };
     default:
       throw new UnsupportedInvoiceError(
         "Positionstyp «" + String(p.type) + "» wird nicht unterstützt – bitte in Bexio von Hand kopieren.",
@@ -262,9 +319,29 @@ function buildPosition(p: any, src: MonthRef, dst: MonthRef): Record<string, unk
   }
 }
 
-// Body für POST /kb_invoice. Ohne document_nr (Bexio nummeriert selbst)
+// Ein Schritt beim Einzel-Anlegen: POST /kb_invoice/{id}/{endpoint}.
+// parentOldId → muss beim Ausführen auf die NEUE ID des Containers
+// umgeschrieben werden (body.parent_id).
+export interface PositionStep {
+  endpoint: string;
+  body: Record<string, unknown>;
+  oldId: number | null;
+  parentOldId: number | null;
+}
+
+export interface NewInvoicePlan {
+  // Body für POST /kb_invoice.
+  payload: Record<string, unknown>;
+  // Leer → alle Positionen stecken schon im payload (ein einziger Aufruf).
+  // Sonst: Rechnung ohne Positionen anlegen, dann diese Schritte der Reihe
+  // nach ausführen. Nötig bei Gruppen, weil POST /kb_invoice keine
+  // KbPositionSubposition annimmt.
+  steps: PositionStep[];
+}
+
+// Plan für die neue Rechnung. Ohne document_nr (Bexio nummeriert selbst)
 // und ohne Status → Bexio legt einen Entwurf an.
-export function buildNewInvoicePayload(inv: any, src: MonthRef, dst: MonthRef): Record<string, unknown> {
+export function planNewInvoice(inv: any, src: MonthRef, dst: MonthRef): NewInvoicePlan {
   const dates = shiftedDates(inv, src, dst);
   if (!dates.newFrom) throw new UnsupportedInvoiceError("Vorlage hat kein Rechnungsdatum.");
 
@@ -298,9 +375,29 @@ export function buildNewInvoicePayload(inv: any, src: MonthRef, dst: MonthRef): 
 
   if (!payload.contact_id) throw new UnsupportedInvoiceError("Vorlage hat keinen Kontakt.");
 
-  payload.positions = (Array.isArray(inv.positions) ? inv.positions : [])
-    .map((p: any) => buildPosition(p, src, dst));
-  return payload;
+  const nodes = flattenPositions(inv);
+  const hasGroups = nodes.some((n) => n.parentOldId !== null || n.position.type === "KbPositionSubposition");
+
+  if (!hasGroups) {
+    payload.positions = nodes.map((n) => ({ type: n.position.type, ...buildPositionBody(n.position, src, dst) }));
+    return { payload, steps: [] };
+  }
+
+  const steps = nodes.map((n) => {
+    const endpoint = POSITION_ENDPOINTS[n.position.type];
+    const body = buildPositionBody(n.position, src, dst); // wirft bei unbekanntem Typ
+    return { endpoint, body, oldId: n.oldId, parentOldId: n.parentOldId };
+  });
+  return { payload, steps };
+}
+
+// Body für POST /kb_invoice bei Rechnungen ohne Gruppen (ein Aufruf).
+export function buildNewInvoicePayload(inv: any, src: MonthRef, dst: MonthRef): Record<string, unknown> {
+  const plan = planNewInvoice(inv, src, dst);
+  if (plan.steps.length > 0) {
+    throw new UnsupportedInvoiceError("Rechnung enthält Gruppen und braucht mehrere Aufrufe (planNewInvoice).");
+  }
+  return plan.payload;
 }
 
 // Kontrolle nach dem Erstellen: Das Total muss dem der Vorlage entsprechen.
