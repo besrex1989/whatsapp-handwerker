@@ -1,13 +1,21 @@
-// Serienrechnungen — Vorschau (nur lesen).
+// Serienrechnungen — Vorschau und Erstellen.
 //
 // Lädt über die Edge Function bexio-recurring-preview alle Rechnungen des
-// Quellmonats und zeigt alt/neu nebeneinander. Erstellt wird hier noch
-// nichts — das kommt in einem späteren Schritt.
+// Quellmonats und zeigt alt/neu nebeneinander (nur lesen). Der Knopf
+// «In Bexio erstellen» legt die ausgewählten Rechnungen über
+// bexio-recurring-create als Entwurf in Bexio an — in Paketen, mit
+// Fortschrittsanzeige. Gestellt und versendet wird nichts.
 
 var _srData = null;
 
 // Auswahl: Rechnungs-ID → true/false. Nach dem Laden sind alle gewählt.
 var _srSelected = {};
+
+// Läuft gerade ein Erstell-Vorgang? Sperrt Knöpfe und Häkchen.
+var _srCreating = false;
+
+// Rechnungen pro Aufruf von bexio-recurring-create (Server-Limit: 10).
+var SR_BATCH_SIZE = 5;
 
 function srMonthString(date) {
   var m = date.getMonth() + 1;
@@ -92,6 +100,18 @@ function srRenderInvoice(inv) {
   var newTitle = srHtmlToText(inv.title["new"]) || "(ohne Titel)";
   var oldTitle = srHtmlToText(inv.title.old) || "(ohne Titel)";
   var badge = inv.text_changed ? "" : '<span class="sr-badge">Kein Monat erkannt</span>';
+  if (inv.already_created) {
+    badge += '<span class="sr-badge done">' +
+      (inv.just_created ? "Erstellt" : "Bereits erstellt") +
+      (inv.already_created.document_nr ? ": " + srEscape(inv.already_created.document_nr) : "") +
+      (inv.already_created.status ? " (" + srEscape(inv.already_created.status) + ")" : "") + "</span>";
+  }
+  if (inv.total_warning) {
+    badge += '<span class="sr-badge">Total weicht ab: ' + srEscape(srFormatAmount(inv.total_warning)) + "</span>";
+  }
+  if (inv.create_error) {
+    badge += '<span class="sr-badge error">Fehler: ' + srEscape(inv.create_error) + "</span>";
+  }
 
   var rows = '<div class="sr-row head"><div></div>' +
     "<div>Bisher (" + srEscape(srMonthLabel(_srData.source_month)) + ")</div>" +
@@ -123,6 +143,7 @@ function srRenderInvoice(inv) {
     "<summary>" +
     '<input type="checkbox" class="sr-check" aria-label="Rechnung auswählen" data-id="' + srEscape(inv.id) + '"' +
     (_srSelected[inv.id] ? " checked" : "") +
+    (inv.already_created || _srCreating ? " disabled" : "") +
     ' onclick="event.stopPropagation()" onchange="srToggle(this)">' +
     '<div class="sr-item-contact">' + srEscape(inv.contact_name) +
     '<div class="sr-item-nr">Vorlage ' + srEscape(inv.document_nr) +
@@ -160,8 +181,7 @@ function srRenderDiagnostics(data) {
   var html = '<details class="sr-diag"><summary>Abgleich mit Bexio</summary>' +
     '<p class="help-text">Bexio hat über die Schnittstelle insgesamt <strong>' + d.list_total +
     "</strong> Rechnung(en) geliefert, davon <strong>" + d.in_month_list + "</strong> mit Rechnungsdatum im " +
-    srEscape(srMonthLabel(data.source_month)) + " (inkl. stornierte). Die Bexio-Suche fand " +
-    d.in_month_search + "." + (d.list_truncated ? " Die Liste wurde wegen ihrer Grösse gekürzt." : "") + "</p>";
+    srEscape(srMonthLabel(data.source_month)) + " (inkl. stornierte)." + (d.list_truncated ? " Die Liste wurde wegen ihrer Grösse gekürzt." : "") + "</p>";
 
   if (monthRows) {
     html += '<table class="sr-diag-table"><thead><tr><th>Rechnungsdatum im</th><th class="num">Anzahl</th></tr></thead><tbody>' +
@@ -211,6 +231,12 @@ function srRender() {
     notes.push("Bei " + s.text_unchanged + " Rechnung(en) wurde im Text keine Monatsangabe gefunden. " +
       "Diese würden mit unverändertem Text kopiert – bitte prüfen.");
   }
+  var doneCount = 0;
+  for (var a = 0; a < data.invoices.length; a++) if (data.invoices[a].already_created) doneCount++;
+  if (doneCount > 0) {
+    notes.push(doneCount + " Rechnung(en) wurden für " + srMonthLabel(data.target_month) +
+      " bereits erstellt und können nicht nochmals gewählt werden.");
+  }
   if (s.canceled_skipped > 0) {
     notes.push(s.canceled_skipped + " stornierte Rechnung(en) wurden ausgelassen.");
   }
@@ -230,8 +256,8 @@ function srRender() {
       : "") +
     "</div>";
   html += '<div class="sr-summary-actions">' +
-    '<button id="sr-create-btn" class="btn btn-primary" disabled title="Folgt im nächsten Schritt">In Bexio erstellen</button>' +
-    '<span class="help-text" style="margin-top: 0;">Das Erstellen folgt im nächsten Schritt. Aktuell nur Vorschau.</span>' +
+    '<button id="sr-create-btn" class="btn btn-primary" onclick="srCreateSelected()">In Bexio erstellen</button>' +
+    '<span class="help-text" style="margin-top: 0;">Legt Entwürfe in Bexio an. Gestellt und versendet wird nichts.</span>' +
     "</div>";
   if (s.text_unchanged > 0) {
     html += '<div class="sr-summary-actions"><label class="sr-filter">' +
@@ -268,7 +294,9 @@ function srUpdateSelectionInfo() {
   }
   var btn = document.getElementById("sr-create-btn");
   if (btn) {
-    btn.textContent = count === 1 ? "1 Rechnung in Bexio erstellen" : count + " Rechnungen in Bexio erstellen";
+    btn.textContent = _srCreating ? "Wird erstellt …"
+      : count === 1 ? "1 Rechnung in Bexio erstellen" : count + " Rechnungen in Bexio erstellen";
+    btn.disabled = _srCreating || count === 0;
   }
 }
 
@@ -278,10 +306,11 @@ function srToggle(checkbox) {
 }
 
 function srApplySelection(fn) {
-  if (!_srData) return;
+  if (!_srData || _srCreating) return;
   for (var i = 0; i < _srData.invoices.length; i++) {
     var inv = _srData.invoices[i];
-    _srSelected[inv.id] = fn(inv);
+    // Bereits erstellte Rechnungen sind nie wählbar.
+    _srSelected[inv.id] = inv.already_created ? false : fn(inv);
   }
   var boxes = document.querySelectorAll(".sr-check");
   for (var j = 0; j < boxes.length; j++) {
@@ -298,11 +327,130 @@ function srSelectChangedOnly() {
   srApplySelection(function (inv) { return inv.text_changed; });
 }
 
+// Tenant-ID und Access-Token des angemeldeten Users. Leitet bei
+// fehlender Session auf die Login-Seite um und liefert dann null.
+async function srGetContext() {
+  var sessionResult = await supabase.auth.getSession();
+  var session = sessionResult.data.session;
+  if (!session) { window.location.href = "login.html"; return null; }
+
+  var tenantResult = await supabase
+    .from("tenants").select("id")
+    .ilike("email", escapeLikePattern(session.user.email))
+    .limit(1).maybeSingle();
+  if (tenantResult.error || !tenantResult.data) {
+    srShowMessage("Konto nicht gefunden.", true);
+    return null;
+  }
+  return { tenantId: tenantResult.data.id, accessToken: session.access_token };
+}
+
+function srFindInvoice(id) {
+  for (var i = 0; i < _srData.invoices.length; i++) {
+    if (String(_srData.invoices[i].id) === String(id)) return _srData.invoices[i];
+  }
+  return null;
+}
+
+// Erstellt die ausgewählten Rechnungen als Entwurf in Bexio. Läuft in
+// Paketen, damit die Edge Function nicht ins Timeout läuft und der
+// Fortschritt sichtbar ist. Bricht ein Paket ab, bleiben die bereits
+// erstellten Rechnungen bestehen; ein erneuter Klick erstellt nur die
+// fehlenden (Doppel-Schutz auf dem Server).
+async function srCreateSelected() {
+  if (!_srData || _srCreating) return;
+
+  var ids = [];
+  for (var i = 0; i < _srData.invoices.length; i++) {
+    var inv = _srData.invoices[i];
+    if (_srSelected[inv.id] && !inv.already_created) ids.push(inv.id);
+  }
+  if (ids.length === 0) return;
+
+  var targetLabel = srMonthLabel(_srData.target_month);
+  var question = (ids.length === 1 ? "1 Rechnung" : ids.length + " Rechnungen") +
+    " für " + targetLabel + " als Entwurf in Bexio erstellen?";
+  if (!confirm(question)) return;
+
+  _srCreating = true;
+  var created = 0, existed = 0, failed = 0, warned = 0;
+  var fatal = "";
+  srRender();
+
+  try {
+    var ctx = await srGetContext();
+    if (!ctx) return;
+
+    for (var start = 0; start < ids.length; start += SR_BATCH_SIZE) {
+      var batch = ids.slice(start, start + SR_BATCH_SIZE);
+      srShowMessage("Rechnungen werden in Bexio erstellt: " + start + " von " + ids.length +
+        " erledigt. Bitte das Fenster nicht schliessen …", false);
+
+      var resp = await fetch(SUPABASE_URL + "/functions/v1/bexio-recurring-create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": "Bearer " + ctx.accessToken,
+        },
+        body: JSON.stringify({
+          tenant_id: ctx.tenantId,
+          source_month: _srData.source_month,
+          target_month: _srData.target_month,
+          invoice_ids: batch,
+        }),
+      });
+      var data = await resp.json().catch(function () { return {}; });
+      if (!resp.ok) {
+        fatal = data.error || ("Fehler (HTTP " + resp.status + ")");
+        break;
+      }
+
+      var results = data.results || [];
+      for (var r = 0; r < results.length; r++) {
+        var res = results[r];
+        var target = srFindInvoice(res.source_id);
+        if (!target) continue;
+        target.create_error = "";
+        if (res.status === "created" || res.status === "exists") {
+          target.already_created = { id: res.new_id, document_nr: res.new_document_nr, status: "Entwurf" };
+          target.just_created = res.status === "created";
+          _srSelected[target.id] = false;
+          if (res.status === "created") {
+            created++;
+            if (res.total_matches === false) { target.total_warning = res.new_total; warned++; }
+          } else {
+            existed++;
+          }
+        } else {
+          target.create_error = res.error || "Unbekannter Fehler";
+          failed++;
+        }
+      }
+      srRender();
+    }
+  } catch (err) {
+    console.error("[srCreateSelected] exception:", err);
+    fatal = "Netzwerkfehler: " + err.message;
+  } finally {
+    _srCreating = false;
+    srRender();
+  }
+
+  var parts = [created + " Rechnung(en) als Entwurf in Bexio erstellt."];
+  if (existed > 0) parts.push(existed + " waren bereits vorhanden.");
+  if (warned > 0) parts.push("Bei " + warned + " weicht das Total von der Vorlage ab – bitte in Bexio prüfen.");
+  if (failed > 0) parts.push(failed + " konnten nicht erstellt werden (siehe rote Markierung in der Liste).");
+  if (fatal) parts.push("Abgebrochen: " + fatal + " Bereits erstellte Rechnungen bleiben bestehen; ein erneuter Klick erstellt nur die fehlenden.");
+  srShowMessage(parts.join(" "), failed > 0 || !!fatal);
+}
+
 async function loadRecurringPreview() {
   var sourceMonth = document.getElementById("sr-source-month").value;
   var targetMonth = document.getElementById("sr-target-month").value;
   var btn = document.getElementById("sr-load-btn");
 
+  if (_srCreating) return;
   if (!sourceMonth || !targetMonth) {
     srShowMessage("Bitte beide Monate wählen.", true);
     return;
@@ -354,7 +502,9 @@ async function loadRecurringPreview() {
     srShowMessage("", false);
     _srData = data;
     _srSelected = {};
-    for (var k = 0; k < data.invoices.length; k++) _srSelected[data.invoices[k].id] = true;
+    for (var k = 0; k < data.invoices.length; k++) {
+      _srSelected[data.invoices[k].id] = !data.invoices[k].already_created;
+    }
     srRender();
   } catch (err) {
     console.error("[loadRecurringPreview] exception:", err);
