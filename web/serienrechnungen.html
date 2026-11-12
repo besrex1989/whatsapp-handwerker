@@ -14,7 +14,7 @@
   <link rel="manifest" href="/site.webmanifest">
   <link rel="stylesheet" href="css/style.css">
   <!-- ?v= bei jeder Änderung hochzählen: /css und /js werden ein Jahr immutable gecacht (vercel.json). -->
-  <link rel="stylesheet" href="css/serienrechnungen.css?v=4">
+  <link rel="stylesheet" href="css/serienrechnungen.css?v=5">
 </head>
 <body>
 
@@ -35,24 +35,29 @@
       <div class="dashboard-header">
         <p><a href="dashboard.html" class="sr-back">← Zurück zum Dashboard</a></p>
         <h1>Serienrechnungen</h1>
-        <p>Rechnungen eines Monats als Vorlage für den nächsten Monat verwenden.</p>
+        <p>Rechnungen eines Zeitraums als Vorlage für einen späteren Zeitraum verwenden.</p>
       </div>
 
       <!-- Auswahl -->
       <div class="dash-card sr-controls">
-        <h3>Monate wählen</h3>
+        <h3>Zeitraum wählen</h3>
         <div class="sr-controls-row">
           <label class="sr-field">
-            <span>Vorlage aus</span>
-            <input type="month" id="sr-source-month">
+            <span>Vorlagen mit Rechnungsdatum von</span>
+            <input type="date" id="sr-source-from" onchange="srUpdateRangeHint()">
+          </label>
+          <label class="sr-field">
+            <span>bis</span>
+            <input type="date" id="sr-source-to" onchange="srUpdateRangeHint()">
           </label>
           <span class="sr-arrow" aria-hidden="true">→</span>
           <label class="sr-field">
-            <span>Neu für</span>
-            <input type="month" id="sr-target-month">
+            <span>Neu ab Monat</span>
+            <input type="month" id="sr-target-month" placeholder="JJJJ-MM" onchange="srUpdateRangeHint()">
           </label>
           <button id="sr-load-btn" class="btn btn-primary" onclick="loadRecurringPreview()">Vorschau laden</button>
         </div>
+        <p id="sr-range-hint" class="help-text sr-range-hint"></p>
         <p class="help-text">
           Die Vorschau liest nur aus Bexio. Angelegt wird erst mit «In Bexio erstellen», und zwar als Entwurf.
         </p>
@@ -72,6 +77,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="js/auth.js"></script>
-  <script src="js/serienrechnungen.js?v=4"></script>
+  <script src="js/serienrechnungen.js?v=5"></script>
 </body>
 </html>

@@ -42,6 +42,15 @@
   min-width: 170px;
 }
 
+.sr-range-hint {
+  color: var(--text);
+  margin-top: 12px;
+}
+
+.sr-item-nr .sr-month-tag {
+  color: var(--text);
+}
+
 .sr-arrow {
   color: var(--text-muted);
   padding-bottom: 9px;
