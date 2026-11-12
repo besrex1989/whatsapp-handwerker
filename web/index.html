@@ -39,7 +39,9 @@
   <meta name="google-site-verification" content="GOOGLE_VERIFICATION_CODE_HERE">
   <meta name="msvalidate.01" content="BING_VERIFICATION_CODE_HERE">
 
-  <link rel="stylesheet" href="css/style.css">
+  <!-- Eigene Styles nur für die Startseite. ?v= bei jeder Änderung hochzählen:
+       /css und /js werden ein Jahr immutable gecacht (vercel.json). -->
+  <link rel="stylesheet" href="css/landing.css?v=1">
 
   <!-- Structured Data -->
   <script type="application/ld+json">
@@ -190,236 +192,265 @@
   }
   </script>
 </head>
-<body>
+<body class="lp">
+  <a href="#main" class="lp-skip">Zum Inhalt springen</a>
 
   <!-- Navigation -->
-  <nav class="navbar">
-    <div class="container nav-container">
-      <a href="/" class="logo">Whats<span>Bill</span></a>
-      <div class="nav-links">
-        <a href="#features">Features</a>
-        <a href="#pricing">Preise</a>
+  <header class="lp-nav" id="lp-nav">
+    <div class="lp-wrap lp-nav-inner">
+      <a href="/" class="lp-logo" aria-label="WhatsBill Startseite">Whats<span>Bill</span></a>
+      <nav class="lp-nav-links" aria-label="Hauptnavigation">
+        <a href="#funktionen">Funktionen</a>
+        <a href="#ablauf">So geht's</a>
+        <a href="#preise">Preise</a>
         <a href="#faq">FAQ</a>
-        <a href="login.html" class="btn btn-outline">Login</a>
-        <a href="login.html#register" class="btn btn-primary">Testen</a>
+      </nav>
+      <div class="lp-nav-cta">
+        <a href="login.html" class="lp-btn lp-btn-ghost">Login</a>
+        <a href="login.html#register" class="lp-btn lp-btn-primary">Gratis testen</a>
       </div>
     </div>
-  </nav>
+  </header>
+
+  <main id="main">
 
   <!-- Hero -->
-  <section class="hero">
-    <div class="container">
-      <div class="hero-content">
-        <h1>Rechnungen & Angebote<br>per <span class="highlight">WhatsApp</span>.</h1>
-        <p class="hero-subtitle">
-          Erstelle Rechnungen und Angebote in Bexio — direkt per Chat vom Handy.
-          Für Schweizer KMU, ohne App-Download.
+  <section class="lp-hero">
+    <div class="lp-hero-glow" aria-hidden="true"></div>
+    <div class="lp-wrap lp-hero-grid">
+      <div class="lp-hero-copy">
+        <p class="lp-eyebrow"><span class="lp-dot"></span>Für Bexio · Für Schweizer KMU</p>
+        <h1>Die Rechnung ist geschrieben, bevor du im Auto&nbsp;sitzt.</h1>
+        <p class="lp-lead">
+          Schreib WhatsBill per <strong>WhatsApp</strong>, was du gemacht hast. Sekunden später
+          liegt die Rechnung oder das Angebot als Entwurf in deinem Bexio&nbsp;— ohne App,
+          ohne Laptop, ohne Büroabend.
         </p>
-        <div class="hero-actions">
-          <a href="login.html#register" class="btn btn-primary btn-lg">14 Tage kostenlos</a>
-          <a href="#features" class="btn btn-outline btn-lg">Mehr erfahren</a>
+        <div class="lp-hero-actions">
+          <a href="login.html#register" class="lp-btn lp-btn-primary lp-btn-lg">14 Tage gratis testen <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          <a href="#ablauf" class="lp-btn lp-btn-ghost lp-btn-lg">So funktioniert's</a>
         </div>
-        <p class="hero-note">Keine Kreditkarte nötig.</p>
+        <ul class="lp-trust">
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Keine Kreditkarte</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Kein App-Download</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Jederzeit kündbar</li>
+        </ul>
       </div>
-      <div class="hero-visual">
-        <div class="phone-mockup">
-          <div class="phone-screen">
-            <div class="chat-header">WhatsBill</div>
-            <div class="chat-messages">
-              <div class="chat-msg bot">Was möchtest du tun?<br><br>1 Rechnung<br>2 Angebot<br>3 Kontakt suchen</div>
-              <div class="chat-msg user">2</div>
-              <div class="chat-msg bot">Name des Kunden?</div>
-              <div class="chat-msg user">Müller Sanitär AG</div>
-              <div class="chat-msg bot">Titel des Angebots?</div>
-              <div class="chat-msg user">Badezimmer Renovation</div>
-              <div class="chat-msg bot">Angebot erstellt.<br>Nr: AN-2026-0042<br>Total: CHF 2'450.00</div>
-            </div>
+
+      <div class="lp-hero-visual">
+        <div class="lp-phone" role="img" aria-label="Beispiel-Chat: Eine Rechnung wird per WhatsApp-Nachricht in Bexio erstellt.">
+          <div class="lp-phone-notch" aria-hidden="true"></div>
+          <div class="lp-chat-head" aria-hidden="true">
+            <div class="lp-avatar">W</div>
+            <div><strong>WhatsBill</strong><span>online</span></div>
           </div>
+          <div class="lp-chat" id="lp-chat" aria-hidden="true">
+            <div class="lp-msg me">Rechnung für Müller Sanitär AG: 3 Std Montage à 120, Material 85</div>
+            <div class="lp-msg bot"><b>Verstanden.</b><br>Kunde: Müller Sanitär AG<br>3 Std Montage à CHF 120.00<br>Material CHF 85.00<br><b>Total CHF 445.00</b><span class="lp-msg-btns"><i>Ja, erstellen</i><i>Abbrechen</i></span></div>
+            <div class="lp-msg me">Ja, erstellen</div>
+            <div class="lp-msg bot">Rechnung wird in Bexio erstellt …</div>
+            <div class="lp-msg bot"><span class="lp-file"><span class="lp-file-ic">PDF</span><span><b>Vorschau RE-00042.pdf</b><small>Entwurf in Bexio gespeichert</small></span></span></div>
+          </div>
+          <div class="lp-chat-input" aria-hidden="true"><span>Nachricht</span><em><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></em></div>
         </div>
+        <div class="lp-float lp-float-a" aria-hidden="true"><span class="lp-float-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span><b>Entwurf in Bexio</b><small>RE-00042 · CHF 445.00</small></span></div>
+        <div class="lp-float lp-float-b" aria-hidden="true"><b>&lt; 2 Min.</b><small>statt 10 am Desktop</small></div>
+        <p class="lp-visual-note">Beispiel-Chat zur Veranschaulichung</p>
       </div>
     </div>
   </section>
 
-  <!-- Features -->
-  <section id="features" class="features">
-    <div class="container">
-      <h2 class="section-title">Alles was du brauchst</h2>
-      <p class="section-subtitle">Rechnungen und Angebote in unter zwei Minuten — direkt aus dem Chat.</p>
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">&#9993;</div>
-          <h3>Rechnungen</h3>
-          <p>Komplette Rechnungen mit Positionen, Preisen und Kundendaten per Chat.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#128196;</div>
-          <h3>Angebote</h3>
-          <p>Angebote unterwegs erstellen — landen direkt als Entwurf in Bexio.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#128269;</div>
-          <h3>Bexio Integration</h3>
-          <p>Mit deinem Bexio-Konto verbunden. Kontakte, Rechnungen, Angebote.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#128221;</div>
-          <h3>Entwürfe bearbeiten</h3>
-          <p>Als Entwurf speichern und später weitere Positionen ergänzen.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#128274;</div>
-          <h3>DSG-konform</h3>
-          <p>Daten verschlüsselt gespeichert. Keine Weitergabe an Dritte.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#128241;</div>
-          <h3>Kein App-Download</h3>
-          <p>Funktioniert direkt in WhatsApp. Keine zusätzliche App nötig.</p>
-        </div>
+  <!-- Kennzahlen -->
+  <section class="lp-stats" aria-label="WhatsBill in Zahlen">
+    <div class="lp-wrap">
+      <div class="lp-stats-grid">
+        <div class="lp-stat"><b>&lt; 2 Min.</b><span>pro Rechnung oder Angebot</span></div>
+        <div class="lp-stat"><b>0 Apps</b><span>WhatsApp hast du schon</span></div>
+        <div class="lp-stat"><b>14 Tage</b><span>gratis, ohne Kreditkarte</span></div>
+        <div class="lp-stat"><b>CHF 19</b><span>pro Monat, alles inklusive</span></div>
       </div>
     </div>
   </section>
 
-  <!-- How it works -->
-  <section class="how-it-works">
-    <div class="container">
-      <h2 class="section-title">So einfach geht's</h2>
-      <div class="steps">
-        <div class="step">
-          <div class="step-number">1</div>
-          <h3>Registrieren</h3>
-          <p>Konto erstellen und Bexio verbinden.</p>
-        </div>
-        <div class="step">
-          <div class="step-number">2</div>
+  <!-- Ablauf -->
+  <section id="ablauf" class="lp-section">
+    <div class="lp-wrap">
+      <p class="lp-kicker" data-reveal>So geht's</p>
+      <h2 class="lp-h2" data-reveal>In drei Schritten von der Baustelle ins Bexio.</h2>
+      <ol class="lp-steps">
+        <li data-reveal>
+          <span class="lp-step-n">1</span>
+          <h3>Konto erstellen</h3>
+          <p>Registrieren, Bexio mit zwei Klicks verbinden. Dein Bexio-Passwort sehen wir nie.</p>
+        </li>
+        <li data-reveal>
+          <span class="lp-step-n">2</span>
           <h3>WhatsApp öffnen</h3>
-          <p>Nachricht an den Bot schreiben.</p>
+          <p>Bot-Nummer speichern und schreiben, was du gemacht hast&nbsp;— in deinen eigenen Worten.</p>
+        </li>
+        <li data-reveal>
+          <span class="lp-step-n">3</span>
+          <h3>Bestätigen, fertig</h3>
+          <p>Der Bot zeigt dir Kunde, Positionen und Total. Ein Tipp, und der Entwurf liegt in Bexio.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- Funktionen -->
+  <section id="funktionen" class="lp-section lp-section-alt">
+    <span id="features" class="lp-anchor"></span>
+    <div class="lp-wrap">
+      <p class="lp-kicker" data-reveal>Funktionen</p>
+      <h2 class="lp-h2" data-reveal>Alles, was zwischen Auftrag und Rechnung liegt.</h2>
+      <div class="lp-bento">
+        <article class="lp-card lp-card-wide lp-card-dark" data-reveal>
+          <div class="lp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/><path d="M8.5 11h7M8.5 14h4.5"/></svg></div>
+          <h3>Schreib einfach, was du gemacht hast</h3>
+          <p>Kein Formular, keine Menüs. WhatsBill erkennt Kunde, Positionen, Mengen und Preise aus einer einzigen Nachricht.</p>
+          <div class="lp-sample">
+            <span class="lp-sample-in">Offerte für Familie Keller: Bad neu fliesen, 18 m² à 95, Abbruch pauschal 600</span>
+            <span class="lp-sample-out">Angebot · 2 Positionen · <b>CHF 2'310.00</b></span>
+          </div>
+        </article>
+        <article class="lp-card" data-reveal>
+          <div class="lp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></div>
+          <h3>Rechnungen &amp; Angebote</h3>
+          <p>Mit Positionen, Mengen, Einheiten und Preisen. Beides landet als Entwurf direkt in Bexio.</p>
+        </article>
+        <article class="lp-card" data-reveal>
+          <div class="lp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></div>
+          <h3>PDF-Vorschau im Chat</h3>
+          <p>Kontrolliere das fertige Dokument auf dem Handy, bevor du es in Bexio verschickst.</p>
+        </article>
+        <article class="lp-card" data-reveal>
+          <div class="lp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg></div>
+          <h3>Dein Bexio-Produktkatalog</h3>
+          <p>Artikel aus Bexio per Liste im Chat auswählen, statt Preise abzutippen.</p>
+        </article>
+        <article class="lp-card" data-reveal>
+          <div class="lp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div>
+          <h3>Kontakte automatisch</h3>
+          <p>Kunde noch nicht in Bexio? Der Bot fragt nach und legt den Kontakt an.</p>
+        </article>
+        <article class="lp-card lp-card-wide lp-card-green" data-reveal>
+          <div class="lp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg></div>
+          <h3>Serienrechnungen</h3>
+          <p>Wiederkehrende Rechnungen eines Monats als Vorlage nehmen und für den neuen Monat als Entwürfe anlegen&nbsp;— mit Vorschau, was sich ändert.</p>
+          <div class="lp-months" aria-hidden="true"><span>Oktober</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg><span class="on">November</span></div>
+        </article>
+        <article class="lp-card lp-card-row" data-reveal>
+          <div class="lp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></div>
+          <div><h3>Entwürfe ergänzen</h3>
+          <p>Heute anfangen, morgen weitere Positionen hinzufügen&nbsp;— solange es ein Entwurf ist.</p></div>
+        </article>
+        <article class="lp-card lp-card-row" data-reveal>
+          <div class="lp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+          <div><h3>DSG-konform</h3>
+          <p>Verschlüsselte Verbindungen, keine Tracking-Cookies, keine Werbung.</p></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Vergleich -->
+  <section class="lp-section">
+    <div class="lp-wrap">
+      <p class="lp-kicker" data-reveal>Der Unterschied</p>
+      <h2 class="lp-h2" data-reveal>Büroabend oder Feierabend.</h2>
+      <div class="lp-versus">
+        <div class="lp-vs lp-vs-old" data-reveal>
+          <h3>Manuell in Bexio</h3>
+          <ul>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>5–10 Minuten pro Rechnung am Desktop</span></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>Laptop oder Desktop nötig</span></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>Kontakte von Hand in Bexio anlegen</span></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>Unterwegs nur mit der Bexio-App</span></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>Produkte einzeln heraussuchen</span></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>PDF erst in Bexio öffnen</span></li>
+          </ul>
         </div>
-        <div class="step">
-          <div class="step-number">3</div>
-          <h3>Dokument erstellen</h3>
-          <p>Schritten folgen — das Dokument landet in Bexio.</p>
+        <div class="lp-vs lp-vs-new" data-reveal>
+          <h3>Mit WhatsBill</h3>
+          <ul>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Unter 2 Minuten</b> per Chat</span></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Jedes Handy</b> mit WhatsApp</span></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Bot fragt nach und <b>legt Kontakte an</b></span></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Direkt in WhatsApp</b>, auch auf der Baustelle</span></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Produkte <b>per Liste im Chat</b> wählen</span></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>PDF-Vorschau</b> direkt auf WhatsApp</span></li>
+          </ul>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Pricing -->
-  <section id="pricing" class="pricing">
-    <div class="container">
-      <h2 class="section-title">Einfache Preise</h2>
-      <p class="section-subtitle">14 Tage kostenlos testen. Danach 19 CHF pro Monat oder 199 CHF pro Jahr.</p>
-      <div class="pricing-grid">
-        <div class="pricing-card">
-          <h3>Monatlich</h3>
-          <div class="price">CHF 19</div>
-          <div class="price-period">pro Monat</div>
-          <ul class="pricing-features">
-            <li>14 Tage kostenlos</li>
-            <li>Unbegrenzte Rechnungen & Angebote</li>
-            <li>Bexio Integration</li>
-            <li>Jederzeit kündbar</li>
-          </ul>
-          <a href="login.html#register" class="btn btn-outline btn-block">Starten</a>
-        </div>
-        <div class="pricing-card featured">
-          <div class="pricing-badge">Spare 29 CHF</div>
-          <h3>Jährlich</h3>
-          <div class="price">CHF 199</div>
-          <div class="price-period">pro Jahr (16.60 CHF / Monat)</div>
-          <ul class="pricing-features">
-            <li>14 Tage kostenlos</li>
-            <li>Unbegrenzte Rechnungen & Angebote</li>
-            <li>Bexio Integration</li>
-            <li>29 CHF günstiger pro Jahr</li>
-          </ul>
-          <a href="login.html#register" class="btn btn-primary btn-block">Starten</a>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Use Cases -->
-  <section class="use-cases">
-    <div class="container">
-      <h2 class="section-title">Für wen ist WhatsBill gemacht?</h2>
-      <p class="section-subtitle">Überall dort, wo Rechnungen und Angebote schnell erstellt werden müssen — unterwegs, auf der Baustelle, beim Kunden.</p>
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">&#128736;</div>
+  <!-- Zielgruppen -->
+  <section class="lp-section lp-section-alt">
+    <div class="lp-wrap">
+      <p class="lp-kicker" data-reveal>Für wen</p>
+      <h2 class="lp-h2" data-reveal>Gemacht für alle, die lieber arbeiten als tippen.</h2>
+      <div class="lp-aud">
+        <article class="lp-card" data-reveal>
+          <div class="lp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg></div>
           <h3>Handwerker &amp; Monteure</h3>
-          <p>Rechnung direkt nach dem Einsatz erstellen, noch bevor du ins Büro fährst. Positionen, Stunden und Material per Chat erfassen — das Dokument landet automatisch in Bexio.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#128200;</div>
+          <p>Rechnung direkt nach dem Einsatz erstellen, noch bevor du ins Büro fährst. Stunden und Material per Chat erfassen&nbsp;— das Dokument landet in Bexio.</p>
+        </article>
+        <article class="lp-card" data-reveal>
+          <div class="lp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div>
           <h3>Treuhänder &amp; Buchhalter</h3>
-          <p>Angebote und Rechnungen für Mandanten schnell erstellen, ohne Bexio am Desktop zu öffnen. Ideal für kurze Aufträge und wiederkehrende Leistungen.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#127968;</div>
+          <p>Angebote und Rechnungen für Mandanten erstellen, ohne Bexio am Desktop zu öffnen. Ideal für kurze Aufträge und wiederkehrende Leistungen.</p>
+        </article>
+        <article class="lp-card" data-reveal>
+          <div class="lp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10M10 20v-6h4v6"/></svg></div>
           <h3>Selbständige &amp; Kleinunternehmen</h3>
-          <p>Du arbeitest allein und hast kein Sekretariat? Mit WhatsBill erstellst du professionelle Rechnungen in unter 2 Minuten — direkt vom Handy.</p>
-        </div>
+          <p>Allein unterwegs und kein Sekretariat? Professionelle Rechnungen in unter zwei Minuten&nbsp;— direkt vom Handy.</p>
+        </article>
       </div>
     </div>
   </section>
 
-  <!-- Comparison -->
-  <section class="comparison">
-    <div class="container">
-      <h2 class="section-title">WhatsBill vs. manuelle Erfassung in Bexio</h2>
-      <p class="section-subtitle">Was du mit WhatsBill sparst — bei jeder einzelnen Rechnung.</p>
-      <div class="comparison-table-wrap">
-        <table class="comparison-table">
-          <thead>
-            <tr>
-              <th></th>
-              <th>Manuell in Bexio</th>
-              <th>Mit WhatsBill</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Zeitaufwand pro Rechnung</td>
-              <td>5&ndash;10 Minuten am Desktop</td>
-              <td><strong>Unter 2 Minuten per Chat</strong></td>
-            </tr>
-            <tr>
-              <td>Geräteabhängig</td>
-              <td>Laptop / Desktop nötig</td>
-              <td><strong>Jedes Handy mit WhatsApp</strong></td>
-            </tr>
-            <tr>
-              <td>Kontakt anlegen</td>
-              <td>Manuell in Bexio-UI</td>
-              <td><strong>Bot fragt und legt an</strong></td>
-            </tr>
-            <tr>
-              <td>Unterwegs nutzbar</td>
-              <td>Nur mit Bexio-App</td>
-              <td><strong>Direkt in WhatsApp</strong></td>
-            </tr>
-            <tr>
-              <td>Produktkatalog</td>
-              <td>Manuell auswählen</td>
-              <td><strong>Per Liste im Chat auswählen</strong></td>
-            </tr>
-            <tr>
-              <td>PDF-Vorschau</td>
-              <td>In Bexio öffnen</td>
-              <td><strong>Direkt auf WhatsApp</strong></td>
-            </tr>
-          </tbody>
-        </table>
+  <!-- Preise -->
+  <section id="preise" class="lp-section">
+    <span id="pricing" class="lp-anchor"></span>
+    <div class="lp-wrap lp-center">
+      <p class="lp-kicker" data-reveal>Preise</p>
+      <h2 class="lp-h2" data-reveal>Ein Preis. Alles drin.</h2>
+      <p class="lp-sub" data-reveal>14 Tage kostenlos testen, ohne Kreditkarte. Danach monatlich oder jährlich.</p>
+      <div class="lp-pricing">
+        <div class="lp-price" data-reveal>
+          <h3>Monatlich</h3>
+          <p class="lp-price-n"><small>CHF</small>19<span>/ Monat</span></p>
+          <ul>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>14 Tage kostenlos</li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Unbegrenzte Rechnungen &amp; Angebote</li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Bexio-Integration &amp; Serienrechnungen</li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Jederzeit kündbar</li>
+          </ul>
+          <a href="login.html#register" class="lp-btn lp-btn-outline lp-btn-block">Gratis starten</a>
+        </div>
+        <div class="lp-price lp-price-top" data-reveal>
+          <span class="lp-badge">Spare CHF 29</span>
+          <h3>Jährlich</h3>
+          <p class="lp-price-n"><small>CHF</small>199<span>/ Jahr</span></p>
+          <p class="lp-price-hint">entspricht CHF 16.60 pro Monat</p>
+          <ul>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>14 Tage kostenlos</li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Unbegrenzte Rechnungen &amp; Angebote</li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Bexio-Integration &amp; Serienrechnungen</li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>CHF 29 günstiger pro Jahr</li>
+          </ul>
+          <a href="login.html#register" class="lp-btn lp-btn-primary lp-btn-block">Gratis starten</a>
+        </div>
       </div>
     </div>
   </section>
 
   <!-- FAQ -->
-  <section id="faq" class="faq-section">
-    <div class="container">
-      <h2 class="section-title">Häufige Fragen</h2>
-      <p class="section-subtitle">Die wichtigsten Antworten in Kürze.</p>
+  <section id="faq" class="lp-section lp-section-alt">
+    <div class="lp-wrap lp-faq-wrap">
+      <p class="lp-kicker" data-reveal>FAQ</p>
+      <h2 class="lp-h2" data-reveal>Häufige Fragen</h2>
       <div class="faq-list">
 
         <details class="faq-item">
@@ -510,32 +541,43 @@
     </div>
   </section>
 
+  <!-- Abschluss -->
+  <section class="lp-final">
+    <div class="lp-hero-glow" aria-hidden="true"></div>
+    <div class="lp-wrap">
+      <h2>Die nächste Rechnung schreibst du im Chat.</h2>
+      <p>In zwei Minuten eingerichtet. 14 Tage gratis, keine Kreditkarte.</p>
+      <a href="login.html#register" class="lp-btn lp-btn-primary lp-btn-lg">Jetzt gratis testen <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+    </div>
+  </section>
+
+  </main>
+
   <!-- Footer -->
-  <footer class="footer">
-    <div class="container">
-      <div class="footer-content">
-        <div class="footer-brand">
-          <span class="logo">Whats<span>Bill</span></span>
-          <p>Rechnungen & Angebote per WhatsApp für Schweizer KMU.</p>
-        </div>
-        <div class="footer-links">
-          <h4>Produkt</h4>
-          <a href="#features">Features</a>
-          <a href="#pricing">Preise</a>
-          <a href="login.html">Login</a>
-        </div>
-        <div class="footer-links">
-          <h4>Rechtliches</h4>
-          <a href="datenschutz.html">Datenschutz</a>
-          <a href="agb.html">AGB</a>
-          <a href="impressum.html">Impressum</a>
-        </div>
+  <footer class="lp-footer">
+    <div class="lp-wrap lp-footer-grid">
+      <div>
+        <span class="lp-logo">Whats<span>Bill</span></span>
+        <p>Rechnungen &amp; Angebote per WhatsApp für Schweizer KMU.</p>
       </div>
-      <div class="footer-bottom">
-        <p>&copy; 2026 WhatsBill &mdash; ein Produkt der <a href="https://hdf.ch" target="_blank" rel="noopener">Haus der Finanzen GmbH</a>, Bern.</p>
+      <div>
+        <h4>Produkt</h4>
+        <a href="#funktionen">Funktionen</a>
+        <a href="#preise">Preise</a>
+        <a href="login.html">Login</a>
       </div>
+      <div>
+        <h4>Rechtliches</h4>
+        <a href="datenschutz.html">Datenschutz</a>
+        <a href="agb.html">AGB</a>
+        <a href="impressum.html">Impressum</a>
+      </div>
+    </div>
+    <div class="lp-wrap">
+      <p class="lp-footer-bottom">&copy; 2026 WhatsBill &mdash; ein Produkt der <a href="https://hdf.ch" target="_blank" rel="noopener">Haus der Finanzen GmbH</a>, Bern.</p>
     </div>
   </footer>
 
+  <script src="js/landing.js?v=1"></script>
 </body>
 </html>
