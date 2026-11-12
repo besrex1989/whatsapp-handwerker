@@ -353,10 +353,39 @@ serve(async (req) => {
         String(a.document_nr).localeCompare(String(b.document_nr), "de", { numeric: true })
       );
 
+    // Abgleich fürs Dashboard: Was hat Bexio über die Schnittstelle
+    // insgesamt geliefert, und welche Rechnungen liegen laut Schnittstelle
+    // NICHT im Quellmonat? Damit lässt sich klären, warum eine Rechnung
+    // fehlt, die in Bexio sichtbar ist.
+    const byMonth: Record<string, number> = {};
+    for (const inv of listResult.invoices) {
+      const key = String(inv.is_valid_from || "").slice(0, 7) || "ohne Datum";
+      byMonth[key] = (byMonth[key] || 0) + 1;
+    }
+    const outside = listResult.invoices
+      .filter((inv: any) => !inMonth(inv))
+      .sort((a: any, b: any) => String(b.is_valid_from || "").localeCompare(String(a.is_valid_from || "")))
+      .slice(0, 200)
+      .map((inv: any) => ({
+        document_nr: inv.document_nr || "",
+        date: String(inv.is_valid_from || "").slice(0, 10),
+        status: STATUS_LABELS[inv.kb_item_status_id] || String(inv.kb_item_status_id ?? ""),
+        title: inv.title || "",
+        total: inv.total ?? null,
+      }));
+
     return json({
       source_month,
       target_month,
       invoices,
+      diagnostics: {
+        list_total: listResult.invoices.length,
+        list_truncated: listResult.truncated,
+        in_month_list: fromList.length,
+        in_month_search: fromSearch.length,
+        by_month: byMonth,
+        outside,
+      },
       summary: {
         total: invoices.length,
         text_changed: invoices.filter((i: any) => i.text_changed).length,

@@ -127,6 +127,44 @@
   cursor: pointer;
 }
 
+.sr-diag {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.sr-diag > summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.sr-diag-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.sr-diag-table th,
+.sr-diag-table td {
+  text-align: left;
+  padding: 6px 8px 6px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.sr-diag-table th {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.sr-diag-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .sr-list {
   padding-bottom: 48px;
 }
