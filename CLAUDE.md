@@ -136,6 +136,9 @@ Frontend-Code während des Deploy-Fensters nicht bricht.
   `_shared/bexio-recurring.ts` (Deno) und `_shared/recurring-invoice.ts` /
   `_shared/month-shift.ts` (rein, mit Node-Tests:
   `node --test supabase/functions/_shared/*.test.ts`).
+- Vorlagen kommen aus einem Zeitraum (`source_from`/`source_to`,
+  Rechnungsdatum). `target_month` gilt für den ersten Monat des Zeitraums;
+  jede Rechnung wird um gleich viele Monate verschoben.
 - Doppel-Schutz über das Bexio-Feld `api_reference`
   (`whatsbill-serie:<Vorlage-ID>:<Zielmonat>`), keine eigene Tabelle.
 - Die Bexio-Suche (`kb_invoice/search`) wird nicht benutzt; Quelle ist die

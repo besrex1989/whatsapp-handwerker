@@ -8,9 +8,13 @@
 
 import {
   addDaysIso,
+  addMonths,
   diffDaysIso,
   lastDayOfMonth,
+  monthDelta,
+  monthOfIso,
   type MonthRef,
+  parseMonth,
   shiftIsoDate,
   shiftMonthText,
 } from "./month-shift.ts";
@@ -41,10 +45,68 @@ export function monthRange(ref: MonthRef): { from: string; to: string } {
   };
 }
 
-export function isInMonth(inv: any, ref: MonthRef): boolean {
-  const { from, to } = monthRange(ref);
+// ---------- Zeitraum ----------
+//
+// Vorlagen kommen aus einem frei wählbaren Zeitraum (Rechnungsdatum
+// von/bis). `target_month` ist der Zielmonat für den ERSTEN Monat des
+// Zeitraums; daraus ergibt sich die Verschiebung in Monaten, die für
+// jede Rechnung auf ihren eigenen Monat angewendet wird:
+//   Zeitraum 01.10.–31.12.2026, Ziel Januar 2027 (= +3 Monate)
+//   → Oktober → Januar, November → Februar, Dezember → März
+
+export interface SeriesRange {
+  from: string; // JJJJ-MM-TT
+  to: string; // JJJJ-MM-TT
+  delta: number; // Verschiebung in Monaten
+  target: MonthRef;
+}
+
+const MAX_RANGE_DAYS = 366 * 2;
+
+function isIsoDate(s: unknown): s is string {
+  if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(s + "T00:00:00Z");
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
+// Liest den Zeitraum aus dem Request. Akzeptiert weiterhin die alte Form
+// { source_month } (ein ganzer Monat).
+export function parseSeriesRequest(body: any): SeriesRange | { error: string } {
+  let from = body?.source_from;
+  let to = body?.source_to;
+  if (!from && !to && body?.source_month) {
+    const m = parseMonth(body.source_month);
+    if (!m) return { error: "source_month im Format JJJJ-MM angeben." };
+    ({ from, to } = monthRange(m));
+  }
+  if (!isIsoDate(from) || !isIsoDate(to)) {
+    return { error: "source_from und source_to im Format JJJJ-MM-TT angeben." };
+  }
+  if (from > to) return { error: "Das Von-Datum liegt nach dem Bis-Datum." };
+  if (diffDaysIso(from, to) > MAX_RANGE_DAYS) {
+    return { error: "Der Zeitraum darf höchstens zwei Jahre umfassen." };
+  }
+  const target = parseMonth(body?.target_month);
+  if (!target) return { error: "target_month im Format JJJJ-MM angeben." };
+  const first = monthOfIso(from);
+  if (!first) return { error: "source_from ist ungültig." };
+  const delta = monthDelta(first, target);
+  if (delta === 0) {
+    return { error: "Der Zielmonat muss sich vom ersten Monat des Zeitraums unterscheiden." };
+  }
+  return { from, to, delta, target };
+}
+
+export function isInRange(inv: any, range: SeriesRange): boolean {
   const d = String(inv.is_valid_from || "").slice(0, 10);
-  return d >= from && d <= to;
+  return d >= range.from && d <= range.to;
+}
+
+// Quell- und Zielmonat einer einzelnen Rechnung.
+export function monthsFor(inv: any, range: SeriesRange): { src: MonthRef; dst: MonthRef } | null {
+  const src = monthOfIso(inv.is_valid_from);
+  if (!src) return null;
+  return { src, dst: addMonths(src, range.delta) };
 }
 
 // ---------- Kennzeichnung ----------
@@ -64,19 +126,28 @@ export function parseSeriesReference(ref: unknown): { sourceId: number; month: s
   return { sourceId: Number(m[1]), month: m[2] };
 }
 
-// Vorlage-ID → bereits erstellte Kopie für den Zielmonat. Stornierte
-// Kopien zählen nicht (dann darf neu erstellt werden); in Bexio gelöschte
-// Entwürfe tauchen in der Liste gar nicht mehr auf.
-export function findExistingCopies(allInvoices: any[], target: MonthRef): Map<number, any> {
-  const key = monthKey(target);
-  const map = new Map<number, any>();
-  for (const inv of allInvoices) {
-    const ref = parseSeriesReference(inv.api_reference);
-    if (!ref || ref.month !== key) continue;
-    if (inv.kb_item_status_id === STATUS_CANCELED) continue;
-    map.set(ref.sourceId, inv);
+// Bereits erstellte Kopien, nachschlagbar über Vorlage-ID + Zielmonat.
+// Stornierte Kopien zählen nicht (dann darf neu erstellt werden); in
+// Bexio gelöschte Entwürfe tauchen in der Liste gar nicht mehr auf.
+export class ExistingCopies {
+  private map = new Map<string, any>();
+
+  constructor(allInvoices: any[]) {
+    for (const inv of allInvoices) {
+      const ref = parseSeriesReference(inv.api_reference);
+      if (!ref) continue;
+      if (inv.kb_item_status_id === STATUS_CANCELED) continue;
+      this.map.set(ref.sourceId + ":" + ref.month, inv);
+    }
   }
-  return map;
+
+  get(sourceId: number, target: MonthRef): any | null {
+    return this.map.get(sourceId + ":" + monthKey(target)) || null;
+  }
+
+  add(sourceId: number, target: MonthRef, copy: any) {
+    this.map.set(sourceId + ":" + monthKey(target), copy);
+  }
 }
 
 // ---------- Daten ----------
@@ -130,6 +201,8 @@ export function buildPreview(
     status: STATUS_LABELS[inv.kb_item_status_id] || "",
     total: inv.total ?? null,
     currency_id: inv.currency_id ?? null,
+    source_month: monthKey(src),
+    target_month: monthKey(dst),
     valid_from: { old: dates.validFrom, new: dates.newFrom },
     valid_to: { old: dates.validTo, new: dates.newTo },
     title,

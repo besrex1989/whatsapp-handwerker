@@ -6,8 +6,11 @@ import assert from "node:assert/strict";
 import {
   buildNewInvoicePayload,
   buildPreview,
-  findExistingCopies,
+  ExistingCopies,
+  isInRange,
+  monthsFor,
   parseSeriesReference,
+  parseSeriesRequest,
   seriesReference,
   totalsMatch,
   UnsupportedInvoiceError,
@@ -106,9 +109,55 @@ test("Kennzeichnung und Doppel-Erkennung", () => {
     { id: 102, api_reference: "whatsbill-serie:44:2026-11", kb_item_status_id: 7 }, // anderer Monat
     { id: 103, api_reference: null, kb_item_status_id: 8 },
   ];
-  const map = findExistingCopies(list, JAN27);
-  assert.deepEqual(Array.from(map.keys()), [42]);
-  assert.equal(map.get(42).id, 100);
+  const copies = new ExistingCopies(list);
+  assert.equal(copies.get(42, JAN27).id, 100);
+  assert.equal(copies.get(43, JAN27), null); // storniert zählt nicht
+  assert.equal(copies.get(44, JAN27), null); // anderer Zielmonat
+  assert.equal(copies.get(44, { year: 2026, month: 11 }).id, 102);
+  copies.add(45, JAN27, { id: 200 });
+  assert.equal(copies.get(45, JAN27).id, 200);
+});
+
+test("Zeitraum: Request lesen", () => {
+  const r: any = parseSeriesRequest({ source_from: "2026-10-01", source_to: "2026-12-31", target_month: "2027-01" });
+  assert.deepEqual(r, { from: "2026-10-01", to: "2026-12-31", delta: 3, target: JAN27 });
+  // alte Form
+  const old: any = parseSeriesRequest({ source_month: "2026-10", target_month: "2026-11" });
+  assert.deepEqual([old.from, old.to, old.delta], ["2026-10-01", "2026-10-31", 1]);
+  // mitten im Monat
+  const mid: any = parseSeriesRequest({ source_from: "2026-10-15", source_to: "2026-11-14", target_month: "2026-11" });
+  assert.equal(mid.delta, 1);
+
+  for (const bad of [
+    { source_from: "2026-12-31", source_to: "2026-10-01", target_month: "2027-01" },
+    { source_from: "2026-10-01", source_to: "2026-10-31", target_month: "2026-10" },
+    { source_from: "2026-02-30", source_to: "2026-03-31", target_month: "2026-04" },
+    { source_from: "01.10.2026", source_to: "2026-10-31", target_month: "2026-11" },
+    { source_from: "2020-01-01", source_to: "2026-10-31", target_month: "2026-11" },
+    { source_from: "2026-10-01", source_to: "2026-10-31" },
+    {},
+  ]) {
+    assert.ok("error" in (parseSeriesRequest(bad) as any), JSON.stringify(bad));
+  }
+});
+
+test("Zeitraum: jede Rechnung wird um gleich viele Monate verschoben", () => {
+  const range: any = parseSeriesRequest({ source_from: "2026-10-01", source_to: "2026-12-31", target_month: "2027-01" });
+  assert.deepEqual(monthsFor({ is_valid_from: "2026-10-01" }, range), { src: OKT, dst: JAN27 });
+  assert.deepEqual(monthsFor({ is_valid_from: "2026-11-09" }, range), { src: { year: 2026, month: 11 }, dst: { year: 2027, month: 2 } });
+  assert.deepEqual(monthsFor({ is_valid_from: "2026-12-01" }, range), { src: { year: 2026, month: 12 }, dst: { year: 2027, month: 3 } });
+  assert.equal(monthsFor({ is_valid_from: null }, range), null);
+  assert.equal(isInRange({ is_valid_from: "2026-12-31" }, range), true);
+  assert.equal(isInRange({ is_valid_from: "2027-01-01" }, range), false);
+  assert.equal(isInRange({ is_valid_from: "2026-09-30" }, range), false);
+
+  const nov = { ...source, id: 7, title: "Beratung November 2026", is_valid_from: "2026-11-09", is_valid_to: "2026-11-16", positions: [] };
+  const m = monthsFor(nov, range)!;
+  const p: any = buildNewInvoicePayload(nov, m.src, m.dst);
+  assert.equal(p.title, "Beratung Februar 2027");
+  assert.equal(p.is_valid_from, "2027-02-09");
+  assert.equal(p.is_valid_to, "2027-02-16");
+  assert.equal(p.api_reference, "whatsbill-serie:7:2027-02");
 });
 
 test("Vorschau enthält bereits erstellte Kopie", () => {

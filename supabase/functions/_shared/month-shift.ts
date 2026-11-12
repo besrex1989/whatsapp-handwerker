@@ -208,8 +208,18 @@ const MONTH_ALT = Array.from(MONTH_TOKENS.keys())
 
 const RANGE_SEP = "(\\s*(?:-|–|—|&ndash;|&mdash;|\\/)\\s*|(?:\\s|&nbsp;)+(?:bis|und|à|au|to)(?:\\s|&nbsp;)+)";
 
-function monthDelta(src: MonthRef, dst: MonthRef): number {
+export function monthDelta(src: MonthRef, dst: MonthRef): number {
   return (dst.year - src.year) * 12 + (dst.month - src.month);
+}
+
+export function addMonths(ref: MonthRef, delta: number): MonthRef {
+  const idx = ref.year * 12 + (ref.month - 1) + delta;
+  return { year: Math.floor(idx / 12), month: (idx % 12) + 1 };
+}
+
+// "2026-10-15" → { year: 2026, month: 10 }
+export function monthOfIso(iso: string): MonthRef | null {
+  return parseMonth(String(iso || "").slice(0, 7));
 }
 
 function renderMonthToken(found: string, token: MonthToken, month: number, dot: string): string {

@@ -22,6 +22,53 @@ function srMonthString(date) {
   return date.getFullYear() + "-" + (m < 10 ? "0" + m : "" + m);
 }
 
+// "2026-10" + 3 → "2027-01"
+function srAddMonths(ym, delta) {
+  var parts = String(ym).split("-");
+  var idx = Number(parts[0]) * 12 + (Number(parts[1]) - 1) + delta;
+  var m = (idx % 12) + 1;
+  return Math.floor(idx / 12) + "-" + (m < 10 ? "0" + m : "" + m);
+}
+
+function srMonthDelta(fromYm, toYm) {
+  var a = String(fromYm).split("-"), b = String(toYm).split("-");
+  return (Number(b[0]) - Number(a[0])) * 12 + (Number(b[1]) - Number(a[1]));
+}
+
+function srIsoDate(date) {
+  var m = date.getMonth() + 1, d = date.getDate();
+  return date.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (d < 10 ? "0" + d : d);
+}
+
+// "01.10.2026 – 31.12.2026"
+function srRangeLabel(from, to) {
+  return srFormatDate(from) + " – " + srFormatDate(to);
+}
+
+// Erklärt unter den Eingabefeldern, welcher Monat zu welchem wird.
+function srUpdateRangeHint() {
+  var el = document.getElementById("sr-range-hint");
+  if (!el) return;
+  var from = document.getElementById("sr-source-from").value;
+  var to = document.getElementById("sr-source-to").value;
+  var target = document.getElementById("sr-target-month").value;
+  if (!from || !to || !/^\d{4}-\d{2}$/.test(target) || from > to) { el.textContent = ""; return; }
+
+  var first = from.slice(0, 7), last = to.slice(0, 7);
+  var delta = srMonthDelta(first, target);
+  if (delta === 0) { el.textContent = ""; return; }
+
+  var pairs = [];
+  var count = srMonthDelta(first, last) + 1;
+  for (var i = 0; i < count && i < 3; i++) {
+    var ym = srAddMonths(first, i);
+    pairs.push(srMonthLabel(ym) + " → " + srMonthLabel(srAddMonths(ym, delta)));
+  }
+  if (count > 3) pairs.push("… " + srMonthLabel(last) + " → " + srMonthLabel(srAddMonths(last, delta)));
+  el.textContent = "Verschiebung um " + Math.abs(delta) + (Math.abs(delta) === 1 ? " Monat" : " Monate") +
+    (delta < 0 ? " zurück" : "") + ": " + pairs.join(", ");
+}
+
 function srMonthLabel(ym) {
   var parts = String(ym).split("-");
   var d = new Date(Number(parts[0]), Number(parts[1]) - 1, 1);
@@ -114,8 +161,8 @@ function srRenderInvoice(inv) {
   }
 
   var rows = '<div class="sr-row head"><div></div>' +
-    "<div>Bisher (" + srEscape(srMonthLabel(_srData.source_month)) + ")</div>" +
-    "<div>Neu (" + srEscape(srMonthLabel(_srData.target_month)) + ")</div></div>";
+    "<div>Bisher (" + srEscape(srMonthLabel(inv.source_month)) + ")</div>" +
+    "<div>Neu (" + srEscape(srMonthLabel(inv.target_month)) + ")</div></div>";
 
   rows += '<div class="sr-row">' +
     '<div class="sr-row-label">Rechnungsdatum</div>' +
@@ -147,7 +194,11 @@ function srRenderInvoice(inv) {
     ' onclick="event.stopPropagation()" onchange="srToggle(this)">' +
     '<div class="sr-item-contact">' + srEscape(inv.contact_name) +
     '<div class="sr-item-nr">Vorlage ' + srEscape(inv.document_nr) +
-    (inv.status ? " · " + srEscape(inv.status) : "") + "</div></div>" +
+    (inv.status ? " · " + srEscape(inv.status) : "") +
+    (_srData.multi_month
+      ? ' · <span class="sr-month-tag">' + srEscape(srMonthLabel(inv.source_month)) + " → " +
+        srEscape(srMonthLabel(inv.target_month)) + "</span>"
+      : "") + "</div></div>" +
     '<div class="sr-item-title">' + srHighlight(oldTitle, newTitle) + badge + "</div>" +
     '<div class="sr-item-total">' + srEscape(srFormatAmount(inv.total)) + "</div>" +
     "</summary>" +
@@ -180,16 +231,16 @@ function srRenderDiagnostics(data) {
 
   var html = '<details class="sr-diag"><summary>Abgleich mit Bexio</summary>' +
     '<p class="help-text">Bexio hat über die Schnittstelle insgesamt <strong>' + d.list_total +
-    "</strong> Rechnung(en) geliefert, davon <strong>" + d.in_month_list + "</strong> mit Rechnungsdatum im " +
-    srEscape(srMonthLabel(data.source_month)) + " (inkl. stornierte)." + (d.list_truncated ? " Die Liste wurde wegen ihrer Grösse gekürzt." : "") + "</p>";
+    "</strong> Rechnung(en) geliefert, davon <strong>" + d.in_month_list + "</strong> mit Rechnungsdatum im Zeitraum " +
+    srEscape(srRangeLabel(data.source_from, data.source_to)) + " (inkl. stornierte)." + (d.list_truncated ? " Die Liste wurde wegen ihrer Grösse gekürzt." : "") + "</p>";
 
   if (monthRows) {
     html += '<table class="sr-diag-table"><thead><tr><th>Rechnungsdatum im</th><th class="num">Anzahl</th></tr></thead><tbody>' +
       monthRows + "</tbody></table>";
   }
   if (outsideRows) {
-    html += '<p class="help-text">Rechnungen, die laut Schnittstelle nicht im ' +
-      srEscape(srMonthLabel(data.source_month)) + " liegen:</p>" +
+    html += '<p class="help-text">Rechnungen, die laut Schnittstelle nicht im Zeitraum ' +
+      srEscape(srRangeLabel(data.source_from, data.source_to)) + " liegen:</p>" +
       '<table class="sr-diag-table"><thead><tr><th>Nr.</th><th>Datum</th><th>Status</th><th>Titel</th><th class="num">Total</th></tr></thead><tbody>' +
       outsideRows + "</tbody></table>";
   }
@@ -206,7 +257,8 @@ function srRender() {
   if (s.total === 0) {
     summaryEl.style.display = "none";
     listEl.innerHTML = "";
-    srShowMessage("Im " + srMonthLabel(data.source_month) + " wurden in Bexio keine Rechnungen gefunden.", false);
+    srShowMessage("Im Zeitraum " + srRangeLabel(data.source_from, data.source_to) +
+      " wurden in Bexio keine Rechnungen gefunden.", false);
     return;
   }
 
@@ -216,7 +268,7 @@ function srRender() {
   var onlyUnchangedEl = document.getElementById("sr-only-unchanged");
   var onlyUnchanged = onlyUnchangedEl ? onlyUnchangedEl.checked : false;
 
-  var html = "<h3>Vorschau " + srEscape(srMonthLabel(data.source_month)) + " → " +
+  var html = "<h3>Vorschau " + srEscape(srRangeLabel(data.source_from, data.source_to)) + " → ab " +
     srEscape(srMonthLabel(data.target_month)) + "</h3>" +
     '<div class="sr-stats">' +
     '<div class="sr-stat"><div class="sr-stat-value">' + s.total + '</div><div class="sr-stat-label">Rechnungen</div></div>' +
@@ -234,8 +286,7 @@ function srRender() {
   var doneCount = 0;
   for (var a = 0; a < data.invoices.length; a++) if (data.invoices[a].already_created) doneCount++;
   if (doneCount > 0) {
-    notes.push(doneCount + " Rechnung(en) wurden für " + srMonthLabel(data.target_month) +
-      " bereits erstellt und können nicht nochmals gewählt werden.");
+    notes.push(doneCount + " Rechnung(en) wurden für den Zielzeitraum bereits erstellt und können nicht nochmals gewählt werden.");
   }
   if (s.canceled_skipped > 0) {
     notes.push(s.canceled_skipped + " stornierte Rechnung(en) wurden ausgelassen.");
@@ -367,9 +418,9 @@ async function srCreateSelected() {
   }
   if (ids.length === 0) return;
 
-  var targetLabel = srMonthLabel(_srData.target_month);
+  var targetLabel = (_srData.multi_month ? "ab " : "für ") + srMonthLabel(_srData.target_month);
   var question = (ids.length === 1 ? "1 Rechnung" : ids.length + " Rechnungen") +
-    " für " + targetLabel + " als Entwurf in Bexio erstellen?";
+    " " + targetLabel + " als Entwurf in Bexio erstellen?";
   if (!confirm(question)) return;
 
   _srCreating = true;
@@ -395,7 +446,8 @@ async function srCreateSelected() {
         },
         body: JSON.stringify({
           tenant_id: ctx.tenantId,
-          source_month: _srData.source_month,
+          source_from: _srData.source_from,
+          source_to: _srData.source_to,
           target_month: _srData.target_month,
           invoice_ids: batch,
         }),
@@ -446,17 +498,26 @@ async function srCreateSelected() {
 }
 
 async function loadRecurringPreview() {
-  var sourceMonth = document.getElementById("sr-source-month").value;
+  var sourceFrom = document.getElementById("sr-source-from").value;
+  var sourceTo = document.getElementById("sr-source-to").value;
   var targetMonth = document.getElementById("sr-target-month").value;
   var btn = document.getElementById("sr-load-btn");
 
   if (_srCreating) return;
-  if (!sourceMonth || !targetMonth) {
-    srShowMessage("Bitte beide Monate wählen.", true);
+  if (!sourceFrom || !sourceTo || !targetMonth) {
+    srShowMessage("Bitte Von-Datum, Bis-Datum und Zielmonat wählen.", true);
     return;
   }
-  if (sourceMonth === targetMonth) {
-    srShowMessage("Vorlage- und Zielmonat müssen verschieden sein.", true);
+  if (!/^\d{4}-\d{2}$/.test(targetMonth)) {
+    srShowMessage("Bitte den Zielmonat im Format JJJJ-MM angeben, z. B. 2027-01.", true);
+    return;
+  }
+  if (sourceFrom > sourceTo) {
+    srShowMessage("Das Von-Datum liegt nach dem Bis-Datum.", true);
+    return;
+  }
+  if (sourceFrom.slice(0, 7) === targetMonth) {
+    srShowMessage("Der Zielmonat muss sich vom ersten Monat des Zeitraums unterscheiden.", true);
     return;
   }
 
@@ -488,7 +549,8 @@ async function loadRecurringPreview() {
       },
       body: JSON.stringify({
         tenant_id: tenantResult.data.id,
-        source_month: sourceMonth,
+        source_from: sourceFrom,
+        source_to: sourceTo,
         target_month: targetMonth,
       }),
     });
@@ -501,6 +563,8 @@ async function loadRecurringPreview() {
 
     srShowMessage("", false);
     _srData = data;
+    // Mehrere Vorlagemonate → pro Rechnung anzeigen, welcher Monat zu welchem wird.
+    _srData.multi_month = data.source_from.slice(0, 7) !== data.source_to.slice(0, 7);
     _srSelected = {};
     for (var k = 0; k < data.invoices.length; k++) {
       _srSelected[data.invoices[k].id] = !data.invoices[k].already_created;
@@ -524,8 +588,11 @@ async function initSerienrechnungen() {
   // Standard: Vormonat → aktueller Monat.
   var now = new Date();
   var prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  document.getElementById("sr-source-month").value = srMonthString(prev);
+  var prevLast = new Date(now.getFullYear(), now.getMonth(), 0);
+  document.getElementById("sr-source-from").value = srIsoDate(prev);
+  document.getElementById("sr-source-to").value = srIsoDate(prevLast);
   document.getElementById("sr-target-month").value = srMonthString(now);
+  srUpdateRangeHint();
 }
 
 initSerienrechnungen();

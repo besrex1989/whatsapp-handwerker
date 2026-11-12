@@ -6,14 +6,18 @@
 // wird nichts angelegt oder verändert. Das Erstellen macht
 // bexio-recurring-create.
 //
-// Request:  POST { tenant_id, source_month: "2026-10", target_month: "2026-11" }
-// Response: { source_month, target_month, invoices: [...], summary, diagnostics }
+// Request:  POST { tenant_id, source_from: "2026-10-01", source_to: "2026-12-31",
+//                  target_month: "2027-01" }
+//           target_month gilt für den ersten Monat des Zeitraums; die
+//           übrigen Monate werden um gleich viele Monate verschoben.
+//           (Alte Form { source_month } wird weiterhin akzeptiert.)
+// Response: { source_from, source_to, target_month, delta_months,
+//             invoices: [...], summary, diagnostics }
 //
 // Auth: gültiges Supabase-User-JWT; die E-Mail im JWT muss zum Tenant
 // gehören (gleiches Muster wie stripe-invoices).
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { parseMonth } from "../_shared/month-shift.ts";
 import {
   authorizeTenant,
   bexio,
@@ -26,8 +30,10 @@ import {
 } from "../_shared/bexio-recurring.ts";
 import {
   buildPreview,
-  findExistingCopies,
-  isInMonth,
+  ExistingCopies,
+  isInRange,
+  monthsFor,
+  parseSeriesRequest,
   STATUS_CANCELED,
   STATUS_LABELS,
 } from "../_shared/recurring-invoice.ts";
@@ -69,39 +75,33 @@ serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { tenant_id, source_month, target_month } = body;
+    const { tenant_id } = body;
     if (!tenant_id) return json({ error: "tenant_id ist erforderlich" }, 400);
 
-    const src = parseMonth(source_month);
-    const dst = parseMonth(target_month);
-    if (!src || !dst) {
-      return json({ error: "source_month und target_month im Format JJJJ-MM angeben." }, 400);
-    }
-    if (src.year === dst.year && src.month === dst.month) {
-      return json({ error: "Quell- und Zielmonat müssen verschieden sein." }, 400);
-    }
+    const range = parseSeriesRequest(body);
+    if ("error" in range) return json({ error: range.error }, 400);
 
     const auth = await authorizeTenant(req, tenant_id);
     if ("response" in auth) return auth.response;
     const token = await getBexioToken(auth.tenant);
 
-    // Die komplette Rechnungsliste ist die Quelle; der Monat wird lokal
+    // Die komplette Rechnungsliste ist die Quelle; der Zeitraum wird lokal
     // gefiltert. Sie liefert zugleich die bereits erstellten Kopien
-    // (api_reference) für den Zielmonat.
+    // (api_reference).
     const [listResult, contactNames] = await Promise.all([
       listAllInvoices(token),
       loadContactNames(token),
     ]);
 
     const all = listResult.invoices
-      .filter((inv: any) => isInMonth(inv, src))
+      .filter((inv: any) => isInRange(inv, range) && monthsFor(inv, range) !== null)
       .sort((a: any, b: any) => a.id - b.id);
     const canceled = all.filter((inv: any) => inv.kb_item_status_id === STATUS_CANCELED).length;
     const usable = all.filter((inv: any) => inv.kb_item_status_id !== STATUS_CANCELED);
     const truncated = usable.length > MAX_INVOICES || listResult.truncated;
     const selected = usable.slice(0, MAX_INVOICES);
 
-    const existing = findExistingCopies(listResult.invoices, dst);
+    const existing = new ExistingCopies(listResult.invoices);
 
     // Die Liste liefert keine Positionen → Detail pro Rechnung nachladen.
     const details = await mapLimit(
@@ -111,30 +111,32 @@ serve(async (req) => {
     );
 
     const invoices = details
-      .map((inv: any) =>
-        buildPreview(
+      .map((inv: any) => {
+        const months = monthsFor(inv, range)!;
+        return buildPreview(
           inv,
           contactNames.get(inv.contact_id) || ("Kontakt #" + inv.contact_id),
-          src,
-          dst,
-          existing.get(inv.id) || null,
-        )
-      )
+          months.src,
+          months.dst,
+          existing.get(inv.id, months.dst),
+        );
+      })
       .sort((a: any, b: any) =>
+        a.source_month.localeCompare(b.source_month) ||
         a.contact_name.localeCompare(b.contact_name, "de") ||
         String(a.document_nr).localeCompare(String(b.document_nr), "de", { numeric: true })
       );
 
     // Abgleich fürs Dashboard: Was hat Bexio über die Schnittstelle
     // insgesamt geliefert, und welche Rechnungen liegen laut Schnittstelle
-    // NICHT im Quellmonat?
+    // NICHT im gewählten Zeitraum?
     const byMonth: Record<string, number> = {};
     for (const inv of listResult.invoices) {
       const key = String(inv.is_valid_from || "").slice(0, 7) || "ohne Datum";
       byMonth[key] = (byMonth[key] || 0) + 1;
     }
     const outside = listResult.invoices
-      .filter((inv: any) => !isInMonth(inv, src))
+      .filter((inv: any) => !isInRange(inv, range))
       .sort((a: any, b: any) => String(b.is_valid_from || "").localeCompare(String(a.is_valid_from || "")))
       .slice(0, 200)
       .map((inv: any) => ({
@@ -146,8 +148,10 @@ serve(async (req) => {
       }));
 
     return json({
-      source_month,
-      target_month,
+      source_from: range.from,
+      source_to: range.to,
+      target_month: body.target_month,
+      delta_months: range.delta,
       invoices,
       diagnostics: {
         list_total: listResult.invoices.length,

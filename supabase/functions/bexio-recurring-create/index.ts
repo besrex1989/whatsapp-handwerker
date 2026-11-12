@@ -5,7 +5,8 @@
 // an (Texte und Daten verschoben, alles andere übernommen). Gestellt und
 // versendet wird nichts — das macht der User in Bexio.
 //
-// Request:  POST { tenant_id, source_month, target_month, invoice_ids: [..] }
+// Request:  POST { tenant_id, source_from, source_to, target_month, invoice_ids: [..] }
+//           Zeitraum und Zielmonat wie bei bexio-recurring-preview.
 //           Höchstens MAX_PER_CALL IDs; das Dashboard ruft in Paketen auf
 //           und zeigt den Fortschritt.
 // Response: { results: [{ source_id, status, ... }] }
@@ -22,7 +23,6 @@
 // gehören.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { parseMonth } from "../_shared/month-shift.ts";
 import {
   authorizeTenant,
   bexio,
@@ -34,8 +34,10 @@ import {
 } from "../_shared/bexio-recurring.ts";
 import {
   buildNewInvoicePayload,
-  findExistingCopies,
-  isInMonth,
+  ExistingCopies,
+  isInRange,
+  monthsFor,
+  parseSeriesRequest,
   STATUS_CANCELED,
   totalsMatch,
 } from "../_shared/recurring-invoice.ts";
@@ -52,17 +54,11 @@ serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { tenant_id, source_month, target_month } = body;
+    const { tenant_id } = body;
     if (!tenant_id) return json({ error: "tenant_id ist erforderlich" }, 400);
 
-    const src = parseMonth(source_month);
-    const dst = parseMonth(target_month);
-    if (!src || !dst) {
-      return json({ error: "source_month und target_month im Format JJJJ-MM angeben." }, 400);
-    }
-    if (src.year === dst.year && src.month === dst.month) {
-      return json({ error: "Quell- und Zielmonat müssen verschieden sein." }, 400);
-    }
+    const range = parseSeriesRequest(body);
+    if ("error" in range) return json({ error: range.error }, 400);
 
     const rawIds = Array.isArray(body.invoice_ids) ? body.invoice_ids : [];
     const ids: number[] = Array.from(new Set(rawIds.map((v: unknown) => Number(v))));
@@ -77,7 +73,7 @@ serve(async (req) => {
     if ("response" in auth) return auth.response;
     const token = await getBexioToken(auth.tenant);
 
-    // Aktueller Stand in Bexio: Welche Kopien gibt es für den Zielmonat schon?
+    // Aktueller Stand in Bexio: Welche Kopien gibt es schon?
     const listResult = await listAllInvoices(token);
     if (listResult.truncated) {
       // Ohne vollständige Liste ist der Doppel-Schutz nicht verlässlich.
@@ -85,14 +81,18 @@ serve(async (req) => {
         error: "Das Bexio-Konto hat zu viele Rechnungen für die Doppel-Prüfung. Bitte Support kontaktieren.",
       }, 400);
     }
-    const existing = findExistingCopies(listResult.invoices, dst);
+    const existing = new ExistingCopies(listResult.invoices);
+    // Vorlage-ID → Rechnungsdatum, um den Zielmonat ohne Detail-Abruf zu kennen.
+    const listed = new Map<number, any>(listResult.invoices.map((inv: any) => [inv.id, inv]));
 
     // Nacheinander, nicht parallel: schont das Bexio-Rate-Limit und hält
     // die Reihenfolge der Rechnungsnummern stabil.
     const results: any[] = [];
     for (const id of ids) {
       try {
-        const copy = existing.get(id);
+        const listedSource = listed.get(id);
+        const listedMonths = listedSource ? monthsFor(listedSource, range) : null;
+        const copy = listedMonths ? existing.get(id, listedMonths.dst) : null;
         if (copy) {
           results.push({
             source_id: id,
@@ -104,20 +104,32 @@ serve(async (req) => {
         }
 
         const source = await bexio(token, "/kb_invoice/" + id);
-        if (!isInMonth(source, src)) {
-          throw new Error("Vorlage liegt nicht im gewählten Vorlagemonat.");
+        const months = monthsFor(source, range);
+        if (!months || !isInRange(source, range)) {
+          throw new Error("Vorlage liegt nicht im gewählten Zeitraum.");
+        }
+        // Das Datum kann sich seit dem Listenabruf geändert haben → nochmals prüfen.
+        const lateCopy = existing.get(id, months.dst);
+        if (lateCopy) {
+          results.push({
+            source_id: id,
+            status: "exists",
+            new_id: lateCopy.id,
+            new_document_nr: lateCopy.document_nr || "",
+          });
+          continue;
         }
         if (source.kb_item_status_id === STATUS_CANCELED) {
           throw new Error("Vorlage ist storniert.");
         }
 
-        const payload = buildNewInvoicePayload(source, src, dst);
+        const payload = buildNewInvoicePayload(source, months.src, months.dst);
         const created = await bexio(token, "/kb_invoice", {
           method: "POST",
           body: JSON.stringify(payload),
         });
         // Für weitere IDs im selben Aufruf merken.
-        existing.set(id, created);
+        existing.add(id, months.dst, created);
 
         results.push({
           source_id: id,
@@ -140,14 +152,15 @@ serve(async (req) => {
 
     console.log("[bexio-recurring-create] " + JSON.stringify({
       tenant: tenant_id,
-      source_month,
-      target_month,
+      source_from: range.from,
+      source_to: range.to,
+      delta_months: range.delta,
       created: results.filter((r) => r.status === "created").length,
       exists: results.filter((r) => r.status === "exists").length,
       errors: results.filter((r) => r.status === "error").length,
     }));
 
-    return json({ source_month, target_month, results }, 200);
+    return json({ results }, 200);
   } catch (err) {
     return errorResponse("bexio-recurring-create", err);
   }
