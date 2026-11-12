@@ -8,7 +8,6 @@
 
 import {
   addDaysIso,
-  addMonths,
   diffDaysIso,
   lastDayOfMonth,
   monthDelta,
@@ -48,16 +47,20 @@ export function monthRange(ref: MonthRef): { from: string; to: string } {
 // ---------- Zeitraum ----------
 //
 // Vorlagen kommen aus einem frei wählbaren Zeitraum (Rechnungsdatum
-// von/bis). `target_month` ist der Zielmonat für den ERSTEN Monat des
-// Zeitraums; daraus ergibt sich die Verschiebung in Monaten, die für
-// jede Rechnung auf ihren eigenen Monat angewendet wird:
-//   Zeitraum 01.10.–31.12.2026, Ziel Januar 2027 (= +3 Monate)
-//   → Oktober → Januar, November → Februar, Dezember → März
+// von/bis). `target_month` ist der Zielmonat für ALLE gewählten
+// Rechnungen, egal aus welchem Monat die Vorlage stammt:
+//   Zeitraum 01.10.–30.11.2026, Ziel Januar 2027
+//   → Oktober-Rechnungen → Januar, November-Rechnungen → Januar
+// Texte werden pro Rechnung von ihrem eigenen Monat auf den Zielmonat
+// verschoben.
+//
+// (Früher galt der Zielmonat nur für den ersten Monat des Zeitraums und
+// die übrigen wurden um gleich viele Monate verschoben. Das führte in der
+// Praxis zu falschen Monaten, wenn das Von-Datum nicht passte.)
 
 export interface SeriesRange {
   from: string; // JJJJ-MM-TT
   to: string; // JJJJ-MM-TT
-  delta: number; // Verschiebung in Monaten
   target: MonthRef;
 }
 
@@ -89,12 +92,14 @@ export function parseSeriesRequest(body: any): SeriesRange | { error: string } {
   const target = parseMonth(body?.target_month);
   if (!target) return { error: "target_month im Format JJJJ-MM angeben." };
   const first = monthOfIso(from);
-  if (!first) return { error: "source_from ist ungültig." };
-  const delta = monthDelta(first, target);
-  if (delta === 0) {
-    return { error: "Der Zielmonat muss sich vom ersten Monat des Zeitraums unterscheiden." };
+  const last = monthOfIso(to);
+  if (!first || !last) return { error: "Zeitraum ist ungültig." };
+  // Läge der Zielmonat im Zeitraum, würden Rechnungen dieses Monats auf
+  // sich selbst kopiert (reines Duplikat ohne Verschiebung).
+  if (monthDelta(first, target) >= 0 && monthDelta(target, last) >= 0) {
+    return { error: "Der Zielmonat darf nicht im Vorlage-Zeitraum liegen." };
   }
-  return { from, to, delta, target };
+  return { from, to, target };
 }
 
 export function isInRange(inv: any, range: SeriesRange): boolean {
@@ -106,7 +111,7 @@ export function isInRange(inv: any, range: SeriesRange): boolean {
 export function monthsFor(inv: any, range: SeriesRange): { src: MonthRef; dst: MonthRef } | null {
   const src = monthOfIso(inv.is_valid_from);
   if (!src) return null;
-  return { src, dst: addMonths(src, range.delta) };
+  return { src, dst: range.target };
 }
 
 // ---------- Kennzeichnung ----------
