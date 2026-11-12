@@ -33,16 +33,47 @@ import {
   listAllInvoices,
 } from "../_shared/bexio-recurring.ts";
 import {
-  buildNewInvoicePayload,
   ExistingCopies,
   isInRange,
   monthsFor,
   parseSeriesRequest,
+  planNewInvoice,
+  type PositionStep,
   STATUS_CANCELED,
   totalsMatch,
 } from "../_shared/recurring-invoice.ts";
 
 const MAX_PER_CALL = 10;
+
+// Legt die Positionen der Reihe nach an und liefert die fertige Rechnung
+// (mit Total) zurück. Gruppen-Kinder bekommen die NEUE ID ihres Containers.
+async function addPositions(token: string, invoiceId: number, steps: PositionStep[]): Promise<any> {
+  const newIds = new Map<number, number>();
+  for (const step of steps) {
+    const body: Record<string, unknown> = { ...step.body };
+    if (step.parentOldId !== null) {
+      const parentNew = newIds.get(step.parentOldId);
+      if (!parentNew) throw new Error("Gruppe für eine Position wurde nicht angelegt.");
+      body.parent_id = parentNew;
+    }
+    const pos = await bexio(token, "/kb_invoice/" + invoiceId + "/" + step.endpoint, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    if (step.oldId !== null && pos && pos.id) newIds.set(step.oldId, pos.id);
+  }
+  return await bexio(token, "/kb_invoice/" + invoiceId);
+}
+
+async function deleteDraft(token: string, invoiceId: number): Promise<boolean> {
+  try {
+    await bexio(token, "/kb_invoice/" + invoiceId, { method: "DELETE" });
+    return true;
+  } catch (err) {
+    console.error("[bexio-recurring-create] cleanup of draft " + invoiceId + " failed:", err);
+    return false;
+  }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -123,11 +154,29 @@ serve(async (req) => {
           throw new Error("Vorlage ist storniert.");
         }
 
-        const payload = buildNewInvoicePayload(source, months.src, months.dst);
-        const created = await bexio(token, "/kb_invoice", {
+        const plan = planNewInvoice(source, months.src, months.dst);
+        let created = await bexio(token, "/kb_invoice", {
           method: "POST",
-          body: JSON.stringify(payload),
+          body: JSON.stringify(plan.payload),
         });
+
+        if (plan.steps.length > 0) {
+          // Rechnung mit Gruppen: Positionen einzeln anlegen. Scheitert ein
+          // Schritt, wird der unvollständige Entwurf wieder gelöscht.
+          try {
+            created = await addPositions(token, created.id, plan.steps);
+          } catch (stepErr) {
+            const cleaned = await deleteDraft(token, created.id);
+            throw new Error(
+              String((stepErr as Error).message || stepErr) +
+                (cleaned
+                  ? ""
+                  : " – ACHTUNG: unvollständiger Entwurf " + (created.document_nr || created.id) +
+                    " konnte nicht gelöscht werden, bitte in Bexio löschen."),
+            );
+          }
+        }
+
         // Für weitere IDs im selben Aufruf merken.
         existing.add(id, months.dst, created);
 
