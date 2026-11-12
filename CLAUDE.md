@@ -112,6 +112,18 @@ Frontend-Code während des Deploy-Fensters nicht bricht.
 - Neue Spalten mit sensiblen Tokens (Bexio, Stripe) **nie** für `anon`
   selectable machen.
 
+### Edge-Function-Auth
+- Alle Functions werden mit `--no-verify-jwt` deployed, sind also ohne
+  Login erreichbar. Jede Function, die Tenant-Daten liest oder schreibt,
+  muss selbst prüfen: `requireTenantOwner(req, tenant_id, "id, email")`
+  aus `_shared/tenant-auth.ts` (Login + Tenant gehört dem Aufrufer).
+- `bexio-oauth`: POST und Callback (GET) verlangen beide den Besitzer.
+  Der OAuth-`state` ist signiert und 15 Minuten gültig
+  (`_shared/oauth-state.ts`, Secret = `BEXIO_CLIENT_SECRET`).
+  `web/bexio-callback.html` schickt dafür das Session-Token mit und lädt
+  bewusst nicht `js/auth.js` (dessen Client würde bei
+  `?error_description=…` die Session verwerfen).
+
 ### Phone-Numbers
 - Intern immer E.164 (`+41…`). Normalisierung via `normalizePhoneCH()`
   in `web/js/auth.js`.
