@@ -139,6 +139,10 @@ Frontend-Code während des Deploy-Fensters nicht bricht.
 - Vorlagen kommen aus einem Zeitraum (`source_from`/`source_to`,
   Rechnungsdatum). `target_month` gilt für den ersten Monat des Zeitraums;
   jede Rechnung wird um gleich viele Monate verschoben.
+- Rechnungen mit Gruppen (`KbPositionSubposition`) lassen sich nicht in
+  einem `POST /kb_invoice` anlegen: Rechnung ohne Positionen erstellen,
+  dann Positionen einzeln (`/kb_position_*`, Kinder mit neuer `parent_id`).
+  Scheitert ein Schritt, wird der Entwurf wieder gelöscht.
 - Doppel-Schutz über das Bexio-Feld `api_reference`
   (`whatsbill-serie:<Vorlage-ID>:<Zielmonat>`), keine eigene Tabelle.
 - Die Bexio-Suche (`kb_invoice/search`) wird nicht benutzt; Quelle ist die

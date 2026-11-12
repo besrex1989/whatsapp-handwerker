@@ -11,6 +11,7 @@ import {
   monthsFor,
   parseSeriesReference,
   parseSeriesRequest,
+  planNewInvoice,
   seriesReference,
   totalsMatch,
   UnsupportedInvoiceError,
@@ -89,11 +90,11 @@ test("Payload: Positionen je Typ", () => {
   ]);
 });
 
-test("Payload: Unterpositionen und unbekannte Typen werden abgelehnt", () => {
-  const sub = { ...source, positions: [{ ...source.positions[0], parent_id: 9 }] };
-  assert.throws(() => buildNewInvoicePayload(sub, OKT, JAN27), UnsupportedInvoiceError);
-  const unknown = { ...source, positions: [{ type: "KbPositionSubposition", text: "x" }] };
-  assert.throws(() => buildNewInvoicePayload(unknown, OKT, JAN27), UnsupportedInvoiceError);
+test("Payload: unbekannte Typen und verwaiste Positionen werden abgelehnt", () => {
+  const orphan = { ...source, positions: [{ ...source.positions[0], parent_id: 9 }] };
+  assert.throws(() => planNewInvoice(orphan, OKT, JAN27), UnsupportedInvoiceError);
+  const unknown = { ...source, positions: [{ type: "KbPositionFoo", text: "x" }] };
+  assert.throws(() => planNewInvoice(unknown, OKT, JAN27), UnsupportedInvoiceError);
   assert.throws(() => buildNewInvoicePayload({ ...source, contact_id: null }, OKT, JAN27), UnsupportedInvoiceError);
 });
 
@@ -172,4 +173,43 @@ test("totalsMatch", () => {
   assert.equal(totalsMatch("2270.10", "2270.1"), true);
   assert.equal(totalsMatch("2270.10", "2270.15"), false);
   assert.equal(totalsMatch(null, "1"), false);
+});
+
+const group = { id: 50, type: "KbPositionSubposition", parent_id: null, text: "Leistungen Okt-Dez 2026", show_pos_nr: true };
+const childA = { id: 51, type: "KbPositionCustom", parent_id: 50, amount: "1", unit_id: 2, account_id: 101, tax_id: 16, text: "Buchhaltung", unit_price: "1000" };
+const childB = { id: 52, type: "KbPositionText", parent_id: 50, text: "Periode 01.10.2026 - 31.12.2026", show_pos_nr: false };
+const after = { id: 53, type: "KbPositionCustom", parent_id: null, amount: "1", unit_id: 2, account_id: 101, tax_id: 16, text: "Spesen", unit_price: "50" };
+
+const expectedSteps = [
+  { endpoint: "kb_position_subposition", body: { text: "Leistungen Jan-Mär 2027", show_pos_nr: true }, oldId: 50, parentOldId: null },
+  { endpoint: "kb_position_custom", body: { text: "Buchhaltung", amount: "1", unit_id: 2, account_id: 101, tax_id: 16, unit_price: "1000" }, oldId: 51, parentOldId: 50 },
+  { endpoint: "kb_position_text", body: { text: "Periode 01.01.2027 - 31.03.2027", show_pos_nr: false }, oldId: 52, parentOldId: 50 },
+  { endpoint: "kb_position_custom", body: { text: "Spesen", amount: "1", unit_id: 2, account_id: 101, tax_id: 16, unit_price: "50" }, oldId: 53, parentOldId: null },
+];
+
+test("Gruppen: flach geliefert (parent_id), auch in vertauschter Reihenfolge", () => {
+  const plan = planNewInvoice({ ...source, positions: [group, childA, childB, after] }, OKT, JAN27);
+  assert.equal("positions" in plan.payload, false);
+  assert.deepEqual(plan.steps, expectedSteps);
+  // Kinder stehen in der Liste erst nach der Folgeposition
+  const shuffled = planNewInvoice({ ...source, positions: [group, after, childA, childB] }, OKT, JAN27);
+  assert.deepEqual(shuffled.steps, expectedSteps);
+});
+
+test("Gruppen: verschachtelt geliefert (positions im Container)", () => {
+  const strip = ({ parent_id, ...rest }: any) => rest;
+  const nested = { ...group, positions: [strip(childA), strip(childB)] };
+  const plan = planNewInvoice({ ...source, positions: [nested, after] }, OKT, JAN27);
+  assert.deepEqual(plan.steps, expectedSteps);
+});
+
+test("Gruppen: Vorschau zeigt Container und Kinder; ohne Gruppen bleibt es ein Aufruf", () => {
+  const prev = buildPreview({ ...source, positions: [group, after, childA, childB] }, "X", OKT, JAN27, null);
+  assert.deepEqual(prev.positions.map((p: any) => p.text.new), [
+    "Leistungen Jan-Mär 2027", "Buchhaltung", "Periode 01.01.2027 - 31.03.2027", "Spesen",
+  ]);
+  const flat = planNewInvoice(source, OKT, JAN27);
+  assert.equal(flat.steps.length, 0);
+  assert.equal((flat.payload.positions as any[]).length, 6);
+  assert.throws(() => buildNewInvoicePayload({ ...source, positions: [group, childA] }, OKT, JAN27), UnsupportedInvoiceError);
 });
