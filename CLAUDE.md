@@ -181,6 +181,16 @@ Frontend-Code während des Deploy-Fensters nicht bricht.
   `customer.subscription.updated`, `customer.subscription.deleted`,
   `invoice.paid`, `invoice.payment_failed`.
 
+### Startseite (Marketing)
+- `web/index.html` nutzt eigene Dateien: `web/css/landing.css` und
+  `web/js/landing.js` (Klassen-Präfix `lp-`). `style.css` wird dort nicht
+  geladen, damit Design-Änderungen an der Startseite Dashboard und Login
+  nicht treffen. Bei jeder Änderung das `?v=` in `index.html` hochzählen.
+- Keine externen Schriften, Bilder oder Skripte (Datenschutzerklärung:
+  keine Dritten ausser den aufgelisteten Auftragsbearbeitern).
+- Texte nur mit Funktionen, die es wirklich gibt. Der Chat im Telefon ist
+  als Beispiel gekennzeichnet.
+
 ### Frontend-Code-Stil
 - **Vanilla JS ohne Build**. Keine `import`-Statements. Globale
   Funktionen/Variablen. Scripts werden per `<script>` im HTML in
