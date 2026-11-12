@@ -134,6 +134,16 @@ function srShowMessage(text, isError) {
   el.style.display = "block";
 }
 
+// Hängt an die aktuelle Meldung einen Link zum Dashboard (Abo abschliessen).
+function srAppendDashboardLink() {
+  var el = document.getElementById("sr-message");
+  var link = document.createElement("a");
+  link.href = "dashboard.html";
+  link.textContent = "Zum Dashboard";
+  el.appendChild(document.createTextNode(" "));
+  el.appendChild(link);
+}
+
 function srTextRow(label, pair, metaHtml) {
   var oldText = srHtmlToText(pair.old);
   var newText = srHtmlToText(pair["new"]);
@@ -592,6 +602,7 @@ async function loadRecurringPreview() {
     var data = await resp.json().catch(function () { return {}; });
     if (!resp.ok) {
       srShowMessage(data.error || ("Fehler (HTTP " + resp.status + ")"), true);
+      if (data.error_code === "subscription_required") srAppendDashboardLink();
       return;
     }
 

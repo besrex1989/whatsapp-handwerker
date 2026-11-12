@@ -149,6 +149,10 @@ Frontend-Code während des Deploy-Fensters nicht bricht.
 - Seite `web/serienrechnungen.html` + `web/js/serienrechnungen.js`. Bei jeder
   Änderung an deren CSS/JS das `?v=` im HTML hochzählen (`/css` und `/js`
   sind ein Jahr immutable gecacht, siehe `vercel.json`).
+- Gehört zum Abo: `authorizeTenant` (`_shared/bexio-recurring.ts`) verlangt
+  ein aktives Abo oder eine laufende Testphase (`_shared/subscription.ts`,
+  gleiche Regel wie das Gate im `whatsapp-webhook`), sonst 402 mit
+  `error_code: "subscription_required"`.
 - `bexio-recurring-preview` liest nur. `bexio-recurring-create` legt
   Entwürfe an (nie stellen/versenden). Gemeinsame Logik in
   `_shared/bexio-recurring.ts` (Deno) und `_shared/recurring-invoice.ts` /

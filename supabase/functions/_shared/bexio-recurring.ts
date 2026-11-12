@@ -3,6 +3,7 @@
 // Token, Bexio-Requests mit Rate-Limit-Wiederholung, Rechnungsliste.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { checkSubscription } from "./subscription.ts";
 
 export const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -35,7 +36,8 @@ function adminClient() {
   );
 }
 
-// Aufrufer muss angemeldet sein und der Tenant muss ihm gehören. Liefert
+// Aufrufer muss angemeldet sein, der Tenant muss ihm gehören und er braucht
+// ein aktives Abo oder eine laufende Testphase. Liefert
 // den Tenant oder eine fertige Fehler-Response.
 export async function authorizeTenant(req: Request, tenantId: string): Promise<{ tenant: any } | { response: Response }> {
   const authHeader = req.headers.get("Authorization") || "";
@@ -50,12 +52,18 @@ export async function authorizeTenant(req: Request, tenantId: string): Promise<{
 
   const { data: tenant } = await adminClient()
     .from("tenants")
-    .select("id, email, bexio_access_token, bexio_refresh_token, bexio_expires_at")
+    .select("id, email, plan, trial_ends_at, bexio_access_token, bexio_refresh_token, bexio_expires_at")
     .eq("id", tenantId)
     .maybeSingle();
   if (!tenant) return { response: json({ error: "Tenant nicht gefunden." }, 404) };
   if (String(tenant.email || "").toLowerCase() !== user.email.toLowerCase()) {
     return { response: json({ error: "Zugriff verweigert." }, 403) };
+  }
+  // Serienrechnungen gehören zum Abo: aktives Abo oder laufende Testphase,
+  // gleiche Regel wie im whatsapp-webhook. Gilt für Vorschau und Erstellen.
+  const sub = checkSubscription(tenant);
+  if (!sub.ok) {
+    return { response: json({ error: sub.message, error_code: "subscription_required", reason: sub.reason }, 402) };
   }
   if (!tenant.bexio_access_token && !tenant.bexio_refresh_token) {
     return { response: json({ error: "Bexio ist nicht verbunden.", error_code: "bexio_not_connected" }, 400) };
