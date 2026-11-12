@@ -188,6 +188,8 @@ serve(async (req) => {
           new_total: created.total ?? null,
           source_total: source.total ?? null,
           total_matches: totalsMatch(created.total, source.total),
+          // Ausgelassene Zeiterfassungs-Positionen → Total weicht absichtlich ab.
+          skipped_positions: plan.skipped,
         });
       } catch (err) {
         console.error("[bexio-recurring-create] invoice " + id + " failed:", err);

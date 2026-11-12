@@ -153,6 +153,12 @@ function srRenderInvoice(inv) {
       (inv.already_created.document_nr ? ": " + srEscape(inv.already_created.document_nr) : "") +
       (inv.already_created.status ? " (" + srEscape(inv.already_created.status) + ")" : "") + "</span>";
   }
+  if (inv.skipped_total != null) {
+    badge += '<span class="sr-badge">Ohne Zeiterfassung erstellt · Total neu ' +
+      srEscape(srFormatAmount(inv.skipped_total)) + "</span>";
+  } else if (inv.ignored_positions > 0 && !inv.already_created) {
+    badge += '<span class="sr-badge">Zeiterfassung wird ausgelassen</span>';
+  }
   if (inv.total_warning) {
     badge += '<span class="sr-badge">Total weicht ab: ' + srEscape(srFormatAmount(inv.total_warning)) + "</span>";
   }
@@ -181,6 +187,14 @@ function srRenderInvoice(inv) {
     if (p.unit_price != null && p.amount != null) {
       meta = '<span class="sr-pos-meta">' + srEscape(srFormatAmount(p.amount)) + " × " +
         srEscape(srFormatAmount(p.unit_price)) + "</span>";
+    }
+    if (p.ignored) {
+      // Position aus der Bexio-Zeiterfassung: kommt nicht in die neue Rechnung.
+      rows += '<div class="sr-row">' +
+        '<div class="sr-row-label">Position ' + (i + 1) + meta + "</div>" +
+        '<div class="sr-old">' + srEscape(srHtmlToText(p.text.old) || "(Zeiterfassung)") + "</div>" +
+        '<div class="sr-new sr-ignored">Wird ausgelassen (Zeiterfassung)</div></div>';
+      continue;
     }
     rows += srTextRow("Position " + (i + 1), p.text, meta);
   }
@@ -282,6 +296,14 @@ function srRender() {
   if (s.text_unchanged > 0) {
     notes.push("Bei " + s.text_unchanged + " Rechnung(en) wurde im Text keine Monatsangabe gefunden. " +
       "Diese würden mit unverändertem Text kopiert – bitte prüfen.");
+  }
+  var ignoredInvoices = 0;
+  for (var g = 0; g < data.invoices.length; g++) {
+    if (data.invoices[g].ignored_positions > 0 && !data.invoices[g].already_created) ignoredInvoices++;
+  }
+  if (ignoredInvoices > 0) {
+    notes.push("Bei " + ignoredInvoices + " Rechnung(en) werden Positionen aus der Bexio-Zeiterfassung ausgelassen. " +
+      "Die übrige Rechnung wird kopiert; die Stunden verrechnen Sie im Entwurf in Bexio.");
   }
   var doneCount = 0;
   for (var a = 0; a < data.invoices.length; a++) if (data.invoices[a].already_created) doneCount++;
@@ -424,7 +446,7 @@ async function srCreateSelected() {
   if (!confirm(question)) return;
 
   _srCreating = true;
-  var created = 0, existed = 0, failed = 0, warned = 0;
+  var created = 0, existed = 0, failed = 0, warned = 0, skippedInvoices = 0;
   var fatal = "";
   srRender();
 
@@ -470,7 +492,14 @@ async function srCreateSelected() {
           _srSelected[target.id] = false;
           if (res.status === "created") {
             created++;
-            if (res.total_matches === false) { target.total_warning = res.new_total; warned++; }
+            if (res.skipped_positions > 0) {
+              // Total weicht absichtlich ab → eigener Hinweis statt Warnung.
+              target.skipped_total = res.new_total;
+              skippedInvoices++;
+            } else if (res.total_matches === false) {
+              target.total_warning = res.new_total;
+              warned++;
+            }
           } else {
             existed++;
           }
@@ -491,6 +520,9 @@ async function srCreateSelected() {
 
   var parts = [created + " Rechnung(en) als Entwurf in Bexio erstellt."];
   if (existed > 0) parts.push(existed + " waren bereits vorhanden.");
+  if (skippedInvoices > 0) {
+    parts.push("Bei " + skippedInvoices + " wurden Positionen aus der Zeiterfassung ausgelassen – Stunden bitte in Bexio verrechnen.");
+  }
   if (warned > 0) parts.push("Bei " + warned + " weicht das Total von der Vorlage ab – bitte in Bexio prüfen.");
   if (failed > 0) parts.push(failed + " konnten nicht erstellt werden (siehe rote Markierung in der Liste).");
   if (fatal) parts.push("Abgebrochen: " + fatal + " Bereits erstellte Rechnungen bleiben bestehen; ein erneuter Klick erstellt nur die fehlenden.");

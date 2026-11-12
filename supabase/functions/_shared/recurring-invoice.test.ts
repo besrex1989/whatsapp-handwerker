@@ -213,3 +213,29 @@ test("Gruppen: Vorschau zeigt Container und Kinder; ohne Gruppen bleibt es ein A
   assert.equal((flat.payload.positions as any[]).length, 6);
   assert.throws(() => buildNewInvoicePayload({ ...source, positions: [group, childA] }, OKT, JAN27), UnsupportedInvoiceError);
 });
+
+test("Zeiterfassung: KbPositionMonitoring wird ausgelassen, Rest kopiert", () => {
+  const mon = { id: 80, type: "KbPositionMonitoring", parent_id: null, text: "Stunden Okt-Dez 2026", amount: "12.5", unit_price: "150" };
+  // ohne Gruppen: ein Aufruf, Monitoring fehlt
+  const flat = planNewInvoice({ ...source, positions: [source.positions[0], mon, source.positions[2]] }, OKT, JAN27);
+  assert.equal(flat.skipped, 1);
+  assert.equal(flat.steps.length, 0);
+  assert.deepEqual((flat.payload.positions as any[]).map((p) => p.type), ["KbPositionCustom", "KbPositionText"]);
+  // mit Gruppen, Monitoring innerhalb der Gruppe
+  const grouped = planNewInvoice({ ...source, positions: [group, childA, { ...mon, parent_id: 50 }, after] }, OKT, JAN27);
+  assert.equal(grouped.skipped, 1);
+  assert.deepEqual(grouped.steps.map((s) => s.endpoint), ["kb_position_subposition", "kb_position_custom", "kb_position_custom"]);
+  // nur Monitoring → Rechnung ohne Positionen
+  const only = planNewInvoice({ ...source, positions: [mon] }, OKT, JAN27);
+  assert.equal(only.skipped, 1);
+  assert.deepEqual(only.payload.positions, []);
+  // ohne Monitoring bleibt skipped 0
+  assert.equal(planNewInvoice(source, OKT, JAN27).skipped, 0);
+
+  const prev = buildPreview({ ...source, positions: [source.positions[0], mon] }, "X", OKT, JAN27, null);
+  assert.equal(prev.ignored_positions, 1);
+  assert.deepEqual(prev.positions.map((p: any) => [p.type, p.ignored, p.text.new]), [
+    ["KbPositionCustom", false, "Buchhaltung 01.01.2027 - 31.03.2027"],
+    ["KbPositionMonitoring", true, ""],
+  ]);
+});

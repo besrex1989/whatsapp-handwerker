@@ -303,6 +303,11 @@
   padding: 0 2px;
 }
 
+.sr-ignored {
+  color: #92400e;
+  font-style: italic;
+}
+
 .sr-pos-meta {
   display: block;
   font-size: 12px;
