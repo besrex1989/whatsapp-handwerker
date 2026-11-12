@@ -142,6 +142,26 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
   return out;
 }
 
+// Komplette Rechnungsliste, seitenweise. Neueste zuerst, damit bei sehr
+// grossen Konten (Abbruch nach LIST_MAX_PAGES) die aktuellen Monate
+// sicher dabei sind.
+const LIST_PAGE_SIZE = 2000;
+const LIST_MAX_PAGES = 10;
+
+async function listAllInvoices(token: string): Promise<{ invoices: any[]; truncated: boolean }> {
+  const invoices: any[] = [];
+  for (let page = 0; page < LIST_MAX_PAGES; page++) {
+    const batch = await bexio(
+      token,
+      "/kb_invoice?order_by=id_desc&limit=" + LIST_PAGE_SIZE + "&offset=" + page * LIST_PAGE_SIZE,
+    );
+    if (!Array.isArray(batch)) break;
+    for (const inv of batch) invoices.push(inv);
+    if (batch.length < LIST_PAGE_SIZE) return { invoices, truncated: false };
+  }
+  return { invoices, truncated: true };
+}
+
 // Kontakt-ID → Anzeigename. Scheitert der Abruf, zeigen wir "Kontakt #id".
 async function loadContactNames(token: string): Promise<Map<number, string>> {
   const names = new Map<number, string>();
@@ -262,23 +282,62 @@ serve(async (req) => {
     const from = `${src.year}-${String(src.month).padStart(2, "0")}-01`;
     const to = `${src.year}-${String(src.month).padStart(2, "0")}-${String(lastDayOfMonth(src)).padStart(2, "0")}`;
 
-    const found = await bexio(token, "/kb_invoice/search?limit=2000&order_by=id", {
-      method: "POST",
-      body: JSON.stringify([
-        { field: "is_valid_from", value: from, criteria: ">=" },
-        { field: "is_valid_from", value: to, criteria: "<=" },
-      ]),
-    });
+    // Zwei Quellen, vereinigt über die Rechnungs-ID:
+    //   1. Suche mit Datumsfilter (schnell)
+    //   2. komplette Rechnungsliste, seitenweise (vollständig)
+    // Grund: Die Suche allein hat in der Praxis nicht alle Rechnungen des
+    // Monats geliefert (37 statt 46). Die Liste ist die verlässliche Quelle;
+    // der Monat wird danach lokal gefiltert.
+    const inMonth = (inv: any) => {
+      const d = String(inv.is_valid_from || "").slice(0, 10);
+      return d >= from && d <= to;
+    };
 
-    const all = (Array.isArray(found) ? found : [])
-      // Sicherheitsnetz, falls Bexio den Datumsfilter anders auslegt.
-      .filter((inv: any) => {
-        const d = String(inv.is_valid_from || "").slice(0, 10);
-        return d >= from && d <= to;
-      });
+    const [searchResult, listResult] = await Promise.all([
+      bexio(token, "/kb_invoice/search?limit=2000&order_by=id", {
+        method: "POST",
+        body: JSON.stringify([
+          { field: "is_valid_from", value: from, criteria: ">=" },
+          { field: "is_valid_from", value: to, criteria: "<=" },
+        ]),
+      }).catch((err) => {
+        // 401/403 betrifft auch die Liste → dort wird der Fehler gemeldet.
+        console.error("[bexio-recurring-preview] search failed:", err);
+        return [];
+      }),
+      listAllInvoices(token),
+    ]);
+
+    const fromSearch = (Array.isArray(searchResult) ? searchResult : []).filter(inMonth);
+    const fromList = listResult.invoices.filter(inMonth);
+
+    const byId = new Map<number, any>();
+    for (const inv of fromList) byId.set(inv.id, inv);
+    for (const inv of fromSearch) if (!byId.has(inv.id)) byId.set(inv.id, inv);
+    const all = Array.from(byId.values()).sort((a: any, b: any) => a.id - b.id);
+
+    // Diagnose: Abweichungen zwischen Suche und Liste ins Log.
+    const searchIds = new Set(fromSearch.map((inv: any) => inv.id));
+    const listIds = new Set(fromList.map((inv: any) => inv.id));
+    const onlyInList = fromList.filter((inv: any) => !searchIds.has(inv.id));
+    const onlyInSearch = fromSearch.filter((inv: any) => !listIds.has(inv.id));
+    console.log("[bexio-recurring-preview] " + JSON.stringify({
+      month: source_month,
+      list_total: listResult.invoices.length,
+      list_pages_truncated: listResult.truncated,
+      in_month_list: fromList.length,
+      in_month_search: fromSearch.length,
+      only_in_list: onlyInList.map((inv: any) => ({
+        nr: inv.document_nr, date: inv.is_valid_from, status: inv.kb_item_status_id,
+      })),
+      only_in_search: onlyInSearch.map((inv: any) => ({
+        nr: inv.document_nr, date: inv.is_valid_from, status: inv.kb_item_status_id,
+      })),
+    }));
+
     const canceled = all.filter((inv: any) => inv.kb_item_status_id === STATUS_CANCELED).length;
     const usable = all.filter((inv: any) => inv.kb_item_status_id !== STATUS_CANCELED);
-    const truncated = usable.length > MAX_INVOICES;
+    const truncated = usable.length > MAX_INVOICES || listResult.truncated;
     const selected = usable.slice(0, MAX_INVOICES);
 
     // Die Suche liefert keine Positionen → Detail pro Rechnung nachladen.
@@ -303,6 +362,8 @@ serve(async (req) => {
         text_changed: invoices.filter((i: any) => i.text_changed).length,
         text_unchanged: invoices.filter((i: any) => !i.text_changed).length,
         canceled_skipped: canceled,
+        found_by_list: fromList.length,
+        found_by_search: fromSearch.length,
         truncated,
       },
     }, 200);
