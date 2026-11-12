@@ -8,10 +8,10 @@
 //
 // Request:  POST { tenant_id, source_from: "2026-10-01", source_to: "2026-12-31",
 //                  target_month: "2027-01" }
-//           target_month gilt für den ersten Monat des Zeitraums; die
-//           übrigen Monate werden um gleich viele Monate verschoben.
+//           target_month ist der Zielmonat für alle Rechnungen des
+//           Zeitraums und darf nicht im Zeitraum liegen.
 //           (Alte Form { source_month } wird weiterhin akzeptiert.)
-// Response: { source_from, source_to, target_month, delta_months,
+// Response: { source_from, source_to, target_month,
 //             invoices: [...], summary, diagnostics }
 //
 // Auth: gültiges Supabase-User-JWT; die E-Mail im JWT muss zum Tenant
@@ -151,7 +151,6 @@ serve(async (req) => {
       source_from: range.from,
       source_to: range.to,
       target_month: body.target_month,
-      delta_months: range.delta,
       invoices,
       diagnostics: {
         list_total: listResult.invoices.length,

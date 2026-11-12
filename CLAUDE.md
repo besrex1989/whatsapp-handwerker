@@ -145,8 +145,9 @@ Frontend-Code während des Deploy-Fensters nicht bricht.
   `_shared/month-shift.ts` (rein, mit Node-Tests:
   `node --test supabase/functions/_shared/*.test.ts`).
 - Vorlagen kommen aus einem Zeitraum (`source_from`/`source_to`,
-  Rechnungsdatum). `target_month` gilt für den ersten Monat des Zeitraums;
-  jede Rechnung wird um gleich viele Monate verschoben.
+  Rechnungsdatum). `target_month` ist der Zielmonat für ALLE gewählten
+  Rechnungen (Okt- und Nov-Vorlagen landen beide im Zielmonat) und darf
+  nicht im Zeitraum liegen.
 - Rechnungen mit Gruppen (`KbPositionSubposition`) lassen sich nicht in
   einem `POST /kb_invoice` anlegen: Rechnung ohne Positionen erstellen,
   dann Positionen einzeln (`/kb_position_*`, Kinder mit neuer `parent_id`).

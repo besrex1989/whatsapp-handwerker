@@ -14,7 +14,7 @@
   <link rel="manifest" href="/site.webmanifest">
   <link rel="stylesheet" href="css/style.css">
   <!-- ?v= bei jeder Änderung hochzählen: /css und /js werden ein Jahr immutable gecacht (vercel.json). -->
-  <link rel="stylesheet" href="css/serienrechnungen.css?v=6">
+  <link rel="stylesheet" href="css/serienrechnungen.css?v=7">
 </head>
 <body>
 
@@ -52,7 +52,7 @@
           </label>
           <span class="sr-arrow" aria-hidden="true">→</span>
           <label class="sr-field">
-            <span>Neu ab Monat</span>
+            <span>Neu für Monat</span>
             <input type="month" id="sr-target-month" placeholder="JJJJ-MM" onchange="srUpdateRangeHint()">
           </label>
           <button id="sr-load-btn" class="btn btn-primary" onclick="loadRecurringPreview()">Vorschau laden</button>
@@ -77,6 +77,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="js/auth.js"></script>
-  <script src="js/serienrechnungen.js?v=6"></script>
+  <script src="js/serienrechnungen.js?v=7"></script>
 </body>
 </html>

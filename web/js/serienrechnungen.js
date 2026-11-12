@@ -45,7 +45,8 @@ function srRangeLabel(from, to) {
   return srFormatDate(from) + " – " + srFormatDate(to);
 }
 
-// Erklärt unter den Eingabefeldern, welcher Monat zu welchem wird.
+// Erklärt unter den Eingabefeldern, in welchem Monat die neuen
+// Rechnungen landen.
 function srUpdateRangeHint() {
   var el = document.getElementById("sr-range-hint");
   if (!el) return;
@@ -55,18 +56,19 @@ function srUpdateRangeHint() {
   if (!from || !to || !/^\d{4}-\d{2}$/.test(target) || from > to) { el.textContent = ""; return; }
 
   var first = from.slice(0, 7), last = to.slice(0, 7);
-  var delta = srMonthDelta(first, target);
-  if (delta === 0) { el.textContent = ""; return; }
-
-  var pairs = [];
-  var count = srMonthDelta(first, last) + 1;
-  for (var i = 0; i < count && i < 3; i++) {
-    var ym = srAddMonths(first, i);
-    pairs.push(srMonthLabel(ym) + " → " + srMonthLabel(srAddMonths(ym, delta)));
+  if (srTargetInRange(first, last, target)) {
+    el.textContent = "Der Zielmonat darf nicht im Vorlage-Zeitraum liegen.";
+    return;
   }
-  if (count > 3) pairs.push("… " + srMonthLabel(last) + " → " + srMonthLabel(srAddMonths(last, delta)));
-  el.textContent = "Verschiebung um " + Math.abs(delta) + (Math.abs(delta) === 1 ? " Monat" : " Monate") +
-    (delta < 0 ? " zurück" : "") + ": " + pairs.join(", ");
+  var source = first === last
+    ? "Rechnungen von " + srMonthLabel(first)
+    : "Alle Rechnungen von " + srMonthLabel(first) + " bis " + srMonthLabel(last);
+  el.textContent = source + " werden neu auf " + srMonthLabel(target) + " datiert.";
+}
+
+// Liegt der Zielmonat innerhalb des Vorlage-Zeitraums (Monate)?
+function srTargetInRange(firstYm, lastYm, targetYm) {
+  return srMonthDelta(firstYm, targetYm) >= 0 && srMonthDelta(targetYm, lastYm) >= 0;
 }
 
 function srMonthLabel(ym) {
@@ -282,7 +284,7 @@ function srRender() {
   var onlyUnchangedEl = document.getElementById("sr-only-unchanged");
   var onlyUnchanged = onlyUnchangedEl ? onlyUnchangedEl.checked : false;
 
-  var html = "<h3>Vorschau " + srEscape(srRangeLabel(data.source_from, data.source_to)) + " → ab " +
+  var html = "<h3>Vorschau " + srEscape(srRangeLabel(data.source_from, data.source_to)) + " → " +
     srEscape(srMonthLabel(data.target_month)) + "</h3>" +
     '<div class="sr-stats">' +
     '<div class="sr-stat"><div class="sr-stat-value">' + s.total + '</div><div class="sr-stat-label">Rechnungen</div></div>' +
@@ -440,7 +442,7 @@ async function srCreateSelected() {
   }
   if (ids.length === 0) return;
 
-  var targetLabel = (_srData.multi_month ? "ab " : "für ") + srMonthLabel(_srData.target_month);
+  var targetLabel = "für " + srMonthLabel(_srData.target_month);
   var question = (ids.length === 1 ? "1 Rechnung" : ids.length + " Rechnungen") +
     " " + targetLabel + " als Entwurf in Bexio erstellen?";
   if (!confirm(question)) return;
@@ -548,8 +550,8 @@ async function loadRecurringPreview() {
     srShowMessage("Das Von-Datum liegt nach dem Bis-Datum.", true);
     return;
   }
-  if (sourceFrom.slice(0, 7) === targetMonth) {
-    srShowMessage("Der Zielmonat muss sich vom ersten Monat des Zeitraums unterscheiden.", true);
+  if (srTargetInRange(sourceFrom.slice(0, 7), sourceTo.slice(0, 7), targetMonth)) {
+    srShowMessage("Der Zielmonat darf nicht im Vorlage-Zeitraum liegen.", true);
     return;
   }
 
