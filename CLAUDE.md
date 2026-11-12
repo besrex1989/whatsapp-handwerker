@@ -143,6 +143,9 @@ Frontend-Code während des Deploy-Fensters nicht bricht.
   einem `POST /kb_invoice` anlegen: Rechnung ohne Positionen erstellen,
   dann Positionen einzeln (`/kb_position_*`, Kinder mit neuer `parent_id`).
   Scheitert ein Schritt, wird der Entwurf wieder gelöscht.
+- Positionen aus der Bexio-Zeiterfassung (`KbPositionMonitoring`, nicht in
+  der API-Doku) werden beim Kopieren ausgelassen (Entscheid des Betreibers);
+  das Total weicht dann absichtlich ab.
 - Doppel-Schutz über das Bexio-Feld `api_reference`
   (`whatsbill-serie:<Vorlage-ID>:<Zielmonat>`), keine eigene Tabelle.
 - Die Bexio-Suche (`kb_invoice/search`) wird nicht benutzt; Quelle ist die

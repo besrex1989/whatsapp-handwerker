@@ -178,16 +178,24 @@ export function buildPreview(
   const header = pair(inv.header || "", shiftMonthText(inv.header, src, dst));
   const footer = pair(inv.footer || "", shiftMonthText(inv.footer, src, dst));
 
-  const positions = flattenPositions(inv)
+  const nodes = flattenPositions(inv);
+  const ignoredCount = nodes.filter((n) => isIgnoredPosition(n.position)).length;
+  const positions = nodes
     .map((node) => node.position)
-    .filter((p: any) => typeof p.text === "string" && p.text !== "")
-    .map((p: any) => ({
-      type: p.type,
-      amount: p.amount ?? null,
-      unit_price: p.unit_price ?? null,
-      position_total: p.position_total ?? null,
-      text: pair(p.text, shiftMonthText(p.text, src, dst)),
-    }));
+    .filter((p: any) => isIgnoredPosition(p) || (typeof p.text === "string" && p.text !== ""))
+    .map((p: any) => {
+      const ignored = isIgnoredPosition(p);
+      const oldText = typeof p.text === "string" ? p.text : "";
+      return {
+        type: p.type,
+        amount: p.amount ?? null,
+        unit_price: p.unit_price ?? null,
+        position_total: p.position_total ?? null,
+        // Ausgelassene Positionen erscheinen in der neuen Rechnung nicht.
+        ignored,
+        text: ignored ? { old: oldText, new: "", changed: false } : pair(oldText, shiftMonthText(oldText, src, dst)),
+      };
+    });
 
   const dates = shiftedDates(inv, src, dst);
   const textChanged = title.changed || header.changed || footer.changed ||
@@ -210,6 +218,7 @@ export function buildPreview(
     header,
     footer,
     positions,
+    ignored_positions: ignoredCount,
     text_changed: textChanged,
     already_created: existingCopy
       ? {
@@ -238,6 +247,16 @@ function copyIfSet(target: Record<string, unknown>, source: any, keys: string[])
 // Container mit Text, dessen Kinder über parent_id auf ihn verweisen.
 // Je nach Endpunkt liefert Bexio die Kinder flach (parent_id) oder
 // verschachtelt (`positions` im Container) — beides wird verstanden.
+
+// Positionen aus der Bexio-Zeiterfassung (KbPositionMonitoring) sind mit
+// erfassten Stunden verknüpft und lassen sich über die API nicht anlegen.
+// Entscheid des Betreibers: beim Kopieren AUSLASSEN — die übrige Rechnung
+// wird erstellt, die Stunden verrechnet der User in Bexio selbst.
+const IGNORED_POSITION_TYPES = new Set(["KbPositionMonitoring"]);
+
+export function isIgnoredPosition(p: any): boolean {
+  return IGNORED_POSITION_TYPES.has(String(p?.type));
+}
 
 export interface PositionNode {
   position: any;
@@ -337,6 +356,9 @@ export interface NewInvoicePlan {
   // nach ausführen. Nötig bei Gruppen, weil POST /kb_invoice keine
   // KbPositionSubposition annimmt.
   steps: PositionStep[];
+  // Anzahl ausgelassener Positionen (Zeiterfassung). > 0 → das Total der
+  // neuen Rechnung weicht absichtlich von der Vorlage ab.
+  skipped: number;
 }
 
 // Plan für die neue Rechnung. Ohne document_nr (Bexio nummeriert selbst)
@@ -375,12 +397,14 @@ export function planNewInvoice(inv: any, src: MonthRef, dst: MonthRef): NewInvoi
 
   if (!payload.contact_id) throw new UnsupportedInvoiceError("Vorlage hat keinen Kontakt.");
 
-  const nodes = flattenPositions(inv);
+  const allNodes = flattenPositions(inv);
+  const nodes = allNodes.filter((n) => !isIgnoredPosition(n.position));
+  const skipped = allNodes.length - nodes.length;
   const hasGroups = nodes.some((n) => n.parentOldId !== null || n.position.type === "KbPositionSubposition");
 
   if (!hasGroups) {
     payload.positions = nodes.map((n) => ({ type: n.position.type, ...buildPositionBody(n.position, src, dst) }));
-    return { payload, steps: [] };
+    return { payload, steps: [], skipped };
   }
 
   const steps = nodes.map((n) => {
@@ -388,7 +412,7 @@ export function planNewInvoice(inv: any, src: MonthRef, dst: MonthRef): NewInvoi
     const body = buildPositionBody(n.position, src, dst); // wirft bei unbekanntem Typ
     return { endpoint, body, oldId: n.oldId, parentOldId: n.parentOldId };
   });
-  return { payload, steps };
+  return { payload, steps, skipped };
 }
 
 // Body für POST /kb_invoice bei Rechnungen ohne Gruppen (ein Aufruf).
