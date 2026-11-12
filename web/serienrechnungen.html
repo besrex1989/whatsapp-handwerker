@@ -14,7 +14,7 @@
   <link rel="manifest" href="/site.webmanifest">
   <link rel="stylesheet" href="css/style.css">
   <!-- ?v= bei jeder Änderung hochzählen: /css und /js werden ein Jahr immutable gecacht (vercel.json). -->
-  <link rel="stylesheet" href="css/serienrechnungen.css?v=3">
+  <link rel="stylesheet" href="css/serienrechnungen.css?v=4">
 </head>
 <body>
 
@@ -54,7 +54,7 @@
           <button id="sr-load-btn" class="btn btn-primary" onclick="loadRecurringPreview()">Vorschau laden</button>
         </div>
         <p class="help-text">
-          Die Vorschau liest nur aus Bexio. Es wird nichts angelegt oder verändert.
+          Die Vorschau liest nur aus Bexio. Angelegt wird erst mit «In Bexio erstellen», und zwar als Entwurf.
         </p>
       </div>
 
@@ -72,6 +72,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="js/auth.js"></script>
-  <script src="js/serienrechnungen.js?v=3"></script>
+  <script src="js/serienrechnungen.js?v=4"></script>
 </body>
 </html>

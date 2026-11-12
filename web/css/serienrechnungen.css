@@ -228,6 +228,22 @@
   white-space: nowrap;
 }
 
+.sr-badge.done {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.sr-badge.error {
+  background: #fee2e2;
+  color: #991b1b;
+  white-space: normal;
+}
+
+.sr-check:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
 .sr-detail {
   border-top: 1px solid var(--border);
   padding: 4px 16px 14px;

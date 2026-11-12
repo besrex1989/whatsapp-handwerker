@@ -127,6 +127,20 @@ Frontend-Code während des Deploy-Fensters nicht bricht.
 - `kb_invoice` nutzt `status_id=7` (Entwurf), `kb_offer` nutzt
   `status_id=1` (Entwurf). Siehe `whatsapp-webhook/index.ts`.
 
+### Serienrechnungen
+- Seite `web/serienrechnungen.html` + `web/js/serienrechnungen.js`. Bei jeder
+  Änderung an deren CSS/JS das `?v=` im HTML hochzählen (`/css` und `/js`
+  sind ein Jahr immutable gecacht, siehe `vercel.json`).
+- `bexio-recurring-preview` liest nur. `bexio-recurring-create` legt
+  Entwürfe an (nie stellen/versenden). Gemeinsame Logik in
+  `_shared/bexio-recurring.ts` (Deno) und `_shared/recurring-invoice.ts` /
+  `_shared/month-shift.ts` (rein, mit Node-Tests:
+  `node --test supabase/functions/_shared/*.test.ts`).
+- Doppel-Schutz über das Bexio-Feld `api_reference`
+  (`whatsbill-serie:<Vorlage-ID>:<Zielmonat>`), keine eigene Tabelle.
+- Die Bexio-Suche (`kb_invoice/search`) wird nicht benutzt; Quelle ist die
+  komplette Liste (`GET /kb_invoice`), gefiltert wird lokal.
+
 ### Stripe
 - `stripe-webhook` ist die einzige Quelle der Wahrheit für `tenants.plan`
   und `subscription_renews_at`. Nie direkt aus dem Frontend setzen.
