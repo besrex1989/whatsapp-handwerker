@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="de-CH">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Serienrechnungen — WhatsBill</title>
+  <meta name="description" content="Wiederkehrende Rechnungen aus dem Vormonat für den neuen Monat vorbereiten.">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#25D366">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/icon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/serienrechnungen.css">
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="container nav-container">
+      <a href="/" class="logo">Whats<span>Bill</span></a>
+      <div class="nav-links">
+        <span id="user-email" class="user-email"></span>
+        <button class="logout-btn" onclick="handleLogout()">Abmelden</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="dashboard">
+    <div class="container">
+
+      <div class="dashboard-header">
+        <p><a href="dashboard.html" class="sr-back">← Zurück zum Dashboard</a></p>
+        <h1>Serienrechnungen</h1>
+        <p>Rechnungen eines Monats als Vorlage für den nächsten Monat verwenden.</p>
+      </div>
+
+      <!-- Auswahl -->
+      <div class="dash-card sr-controls">
+        <h3>Monate wählen</h3>
+        <div class="sr-controls-row">
+          <label class="sr-field">
+            <span>Vorlage aus</span>
+            <input type="month" id="sr-source-month">
+          </label>
+          <span class="sr-arrow" aria-hidden="true">→</span>
+          <label class="sr-field">
+            <span>Neu für</span>
+            <input type="month" id="sr-target-month">
+          </label>
+          <button id="sr-load-btn" class="btn btn-primary" onclick="loadRecurringPreview()">Vorschau laden</button>
+        </div>
+        <p class="help-text">
+          Die Vorschau liest nur aus Bexio. Es wird nichts angelegt oder verändert.
+        </p>
+      </div>
+
+      <!-- Meldungen -->
+      <div id="sr-message" class="sr-message" style="display: none;"></div>
+
+      <!-- Zusammenfassung -->
+      <div id="sr-summary" class="dash-card sr-summary" style="display: none;"></div>
+
+      <!-- Liste -->
+      <div id="sr-list" class="sr-list"></div>
+
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/serienrechnungen.js"></script>
+</body>
+</html>
