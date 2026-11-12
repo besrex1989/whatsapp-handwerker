@@ -10,9 +10,13 @@
 //     -> { accounts: [{ id, account_no, name }], preferred_account_id }
 //   POST /bexio-accounts { tenant_id, account_id|null }
 //     -> { success: true }
+//
+// Beide Endpunkte verlangen Login + Besitz des Tenants (requireTenantOwner),
+// weil die Function mit --no-verify-jwt deployed wird.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { requireTenantOwner } from "../_shared/tenant-auth.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -64,11 +68,9 @@ async function getBexioToken(tenant: any): Promise<string> {
   return tokens.access_token;
 }
 
-async function loadTenant(tenantId: string): Promise<any> {
-  const res = await supabase.from("tenants").select("*").eq("id", tenantId).single();
-  if (res.error || !res.data) throw new Error("Tenant nicht gefunden.");
-  return res.data;
-}
+// Spalten, die GET braucht (Token-Refresh + Antwort).
+const TENANT_COLUMNS = "id, email, bexio_access_token, bexio_refresh_token, "
+  + "bexio_expires_at, bexio_preferred_account_id, bexio_account_id";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -82,7 +84,10 @@ serve(async (req) => {
       if (!tenantId) {
         return json({ error: "tenant_id required" }, 400);
       }
-      const tenant = await loadTenant(tenantId);
+      // Aufrufer muss angemeldet sein und der Tenant muss ihm gehören.
+      const auth = await requireTenantOwner(req, tenantId, TENANT_COLUMNS);
+      if ("response" in auth) return auth.response;
+      const tenant = auth.tenant;
       const token = await getBexioToken(tenant);
 
       const resp = await fetch("https://api.bexio.com/2.0/accounts", {
@@ -128,6 +133,9 @@ serve(async (req) => {
       const { tenant_id, account_id } = body;
       if (!tenant_id) return json({ error: "tenant_id required" }, 400);
 
+      const auth = await requireTenantOwner(req, tenant_id, "id, email");
+      if ("response" in auth) return auth.response;
+
       // account_id may be null to clear the preference.
       const prefId = account_id == null ? null : Number(account_id);
       if (prefId != null && (!Number.isInteger(prefId) || prefId <= 0)) {
@@ -143,7 +151,7 @@ serve(async (req) => {
           bexio_account_id: null,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", tenant_id);
+        .eq("id", auth.tenant.id);
       if (upd.error) return json({ error: upd.error.message }, 500);
       return json({ success: true, preferred_account_id: prefId }, 200);
     }

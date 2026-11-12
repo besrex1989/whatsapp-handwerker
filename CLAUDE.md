@@ -51,8 +51,6 @@ supabase/
     stripe-portal/         # Öffnet Stripe Customer Portal
     stripe-webhook/        # Empfängt Stripe-Events → aktualisiert tenants
     stripe-invoices/       # Listet Rechnungen im Dashboard
-    whatsapp-register/     # Registriert Tenant-Nummer bei Meta Cloud
-    whatsapp-subscribe-app/# Abonniert WABA an die App
   migrations/              # SQL-Migrationen (NICHT rückdatieren — immer
                            # neue Nummer anhängen)
 .github/workflows/         # CI (siehe unten)
